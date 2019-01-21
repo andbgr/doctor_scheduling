@@ -1,5 +1,5 @@
 # DESCRIPTION:
-# Creates a doctor's schedule ("Dienstplan") for a group of doctors in a 
+# Creates a doctors' schedule ("Dienstplan") for a group of doctors in a 
 # department, assigning one 25h shift (or 2 12.5h shifts) each day, and 
 # assigning normal day shifts for the other doctors. Takes as input a list of 
 # doctors with general preferences, a schedule with their constraints 

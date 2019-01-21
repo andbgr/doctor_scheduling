@@ -1,8 +1,6 @@
 # TODO: Description
 # TODO: also write doctors template
-# TODO: expand matrices by 2 days so the whole boundary checking becomes obsolete?
 # TODO: issue: a request for N2 will always be ignored if there is a request for N
-# TODO: nosplit if projected total presence is below minimum
 require(Hmisc)
 # require(xlsx)
 
