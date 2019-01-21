@@ -1,0 +1,4 @@
+This script generates a doctors' schedule ("Dienstplan") for a department,
+with night shifts (25h or split 12.5h) and normal day shifts, based on per-day
+constraints, trying to optimize for several parameters. See example.R in the
+example folder for more.
