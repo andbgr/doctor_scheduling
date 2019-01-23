@@ -1216,7 +1216,7 @@ optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(
 		hardmode <- runif(1, min = 0, max = 1)
 		jitter <- runif(1, min = 0, max = 1)
 # 		hardmode <- FALSE
-# 		jitter <- FALSE
+		jitter <- FALSE
 		out1 <- suppressMessages(create.schedule(doctors = doctors, 
 		                                         requests = requests, 
 		                                         wards = wards, 
