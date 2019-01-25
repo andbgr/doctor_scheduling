@@ -4,4 +4,4 @@ constraints, trying to optimize for several parameters. See example.R in the
 example folder for more.
 
 Requirements: you need R (https://www.r-project.org/) which works on all major
-platforms, and the Hmisc package, wich can be installed inside R.
+platforms, plus the Hmisc and xlsx packages, wich can be installed inside R.

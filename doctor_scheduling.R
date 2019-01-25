@@ -2,7 +2,7 @@
 # TODO: also write doctors template
 # TODO: issue: a request for N2 will always be ignored if there is a request for N
 require(Hmisc)
-# require(xlsx)
+require(xlsx)
 
 
 
@@ -27,34 +27,115 @@ if(file.exists("holidays.list"))
 
 
 
-# XLSX version
-# write.template.xlsx <- function(start_date, end_date, doctors = read.doctors(), date_format = NA)
-# {
-# 	label <- format(start_date, format="%Y-%m")
-# 	
-# 	days <- seq(from=start_date, to=end_date, by=1)
-# 	
-# 	template <- matrix(rep(""), length(rownames(doctors)), length(days), dimnames = list(rownames(doctors), format(days, format="%d")))
-# 	
-# 	wb <- createWorkbook()
-# 	sheet <- createSheet(wb, sheetName=label)
-# 	addDataFrame(as.data.frame(template), sheet)
-# 	saveWorkbook(wb, "template.xlsx")
-# 	### TODO: cell formatting
-# }
-
-
-
-
 write.template <- function(file = "template.csv", start_date, end_date, doctors = read.doctors(), date_format = NA)
 {
-	days <- as.character(seq(from=start_date, to=end_date, by=1))
+	dates <- as.character(seq(from=start_date, to=end_date, by=1))
 	
-	template <- matrix(rep(""), length(rownames(doctors)), length(days), dimnames = list(rownames(doctors), as.character(days)))
+	template <- matrix(rep(""), length(rownames(doctors)), length(dates), dimnames = list(rownames(doctors), as.character(dates)))
 	
 	if(!is.na(date_format))
 		colnames(template) <- format(as.Date(colnames(template)), date_format)
 	write.csv(template, file = file, quote = FALSE)
+}
+
+
+
+
+# XLSX version
+# this is a bit tedious, but we can have formatted spreadsheets
+write.template.xlsx <- function(start_date, end_date, doctors = read.doctors(), date_format = NA)
+{
+	dates <- seq(from=start_date, to=end_date, by=1)
+	
+	template <- matrix(rep(""), length(rownames(doctors)), length(dates), dimnames = list(rownames(doctors), format(dates, format="%d")))
+	
+	# here begins the xlsx stuff
+	wb <- createWorkbook()
+	sheet <- createSheet(wb, sheetName=format(start_date, format="%Y-%m"))
+	addDataFrame(as.data.frame(template), sheet)
+	rows  <- getRows(sheet)
+	cells <- getCells(rows)
+	
+	# YYYY-MM in topleft cell
+	setCellValue(cells[["1.1"]], format(start_date, format="%Y-%m"))
+	
+	cellstyle.table <- CellStyle(wb) + Border(color="black", position = c("TOP", "LEFT", "BOTTOM", "RIGHT"))
+	for(day in seq_along(dates))
+	{
+		for(row in seq_along(rownames(doctors)))
+		{
+			setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.table)
+		}
+	}
+	
+	# Colored background for weekends
+	cellstyle.weekend <- cellstyle.table + Fill(backgroundColor="lavender")
+	for(day in seq_along(dates))
+	{
+		if(!is.workday(dates[day]))
+		{
+			for(row in seq_along(rownames(doctors)))
+			{
+				setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.weekend)
+			}
+		}
+	}
+	
+	# Resize Columns
+	autoSizeColumn(sheet, 1)
+	for(column in 1:length(dates)+1)
+	{
+		setColumnWidth(sheet, column, 5)
+	}
+	
+	saveWorkbook(wb, "template.xlsx")
+	
+	
+	
+	
+	# ward min presence table
+	template <- matrix(rep(""), length(levels(doctors$ward)), length(dates), dimnames = list(levels(doctors$ward), format(dates, format="%d")))
+	
+	# here begins the xlsx stuff
+	wb <- createWorkbook()
+	sheet <- createSheet(wb, sheetName=format(start_date, format="%Y-%m"))
+	addDataFrame(as.data.frame(template), sheet)
+	rows  <- getRows(sheet)
+	cells <- getCells(rows)
+	
+	# YYYY-MM in topleft cell
+	setCellValue(cells[["1.1"]], format(start_date, format="%Y-%m"))
+	
+	cellstyle.table <- CellStyle(wb) + Border(color="black", position = c("TOP", "LEFT", "BOTTOM", "RIGHT"))
+	for(day in seq_along(dates))
+	{
+		for(row in seq_along(levels(doctors$ward)))
+		{
+			setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.table)
+		}
+	}
+	
+	# Colored background for weekends
+	cellstyle.weekend <- cellstyle.table + Fill(backgroundColor="lavender")
+	for(day in seq_along(dates))
+	{
+		if(!is.workday(dates[day]))
+		{
+			for(row in seq_along(levels(doctors$ward)))
+			{
+				setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.weekend)
+			}
+		}
+	}
+	
+	# Resize Columns
+	autoSizeColumn(sheet, 1)
+	for(column in 1:length(dates)+1)
+	{
+		setColumnWidth(sheet, column, 5)
+	}
+	
+	saveWorkbook(wb, "wards.min_presence.xlsx")
 }
 
 
@@ -123,11 +204,33 @@ read.doctors <- function(file = "doctors.csv")
 
 
 # TODO: input validation
-# TODO: xlsx accepts sloppy date, csv accepts ISO date, make them the same
-# TODO: read.xlsx coerces spaces to periods, subsequent pattern matching currently counts on this
 read.requests <- function(file = "requests.csv")
 {
 	requests <- as.matrix(read.csv(file, row.names = 1, colClasses = "character", check.names = FALSE))
+	
+	# change U or ZA on holidays to !N
+	requests[,!is.workday(colnames(requests))][requests[,!is.workday(colnames(requests))] %in% c("U", "ZA")] <- "!N"
+	return(requests)
+}
+
+
+
+
+# TODO: input validation
+# TODO: not very elegant, but this requires doctors as input to select relevant part of the xlsx file (and not comments etc)
+read.requests.xlsx <- function(file = "requests.xlsx", doctors = read.doctors("doctors.csv"))
+{
+	#colClasses="character" doesn't seem to work, it is coerced to factor
+	raw <- read.xlsx(file, sheetIndex=1, rowIndex=0:length(rownames(doctors)) + 1, colClasses="character")
+	raw <- as.matrix(raw)
+	raw[is.na(raw)] <- ""
+	# i have no idea why colnames are prefixed with "X" when reading xlsx
+	colnames(raw) <- sub("^X", "", colnames(raw))
+	# i also don't know why "-" is converted to "." when reading xlsx
+	date.ym <- sub("\\.", "-", colnames(raw)[1])
+	
+	requests <- raw[,-1]
+	dimnames(requests) <- list(raw[,1], paste(date.ym, colnames(raw)[-1], sep = "-"))
 	
 	# change U or ZA on holidays to !N
 	requests[,!is.workday(colnames(requests))][requests[,!is.workday(colnames(requests))] %in% c("U", "ZA")] <- "!N"
