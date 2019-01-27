@@ -9,20 +9,20 @@
 
 
 # install.packages("Hmisc")
+# install.packages("xlsx")
 source("doctor_scheduling.R")
 
 
 start_date <- as.Date("2019-02-01")
 end_date   <- as.Date("2019-02-28")
 doctors <- read.doctors("doctors.csv")
-write.template(file = "template.csv", start_date = start_date, end_date = end_date, doctors = doctors)
-# write.template(file = "template.csv", start_date = start_date, end_date = end_date, doctors = doctors, date_format = "%a %d")
+write.templates(start_date = start_date, end_date = end_date, doctors = doctors)
 
 
-# ...FILL TEMPLATE.CSV WITH REQUESTS AND SAVE IT AS requests.csv
+# ...FILL requests.xlsx AND wards.xlsx
 
 
-# ACCEPTABLE INPUT:
+# ACCEPTABLE INPUT for requests.xlsx:
 # X             end of night shift (only on first day)
 # !N            no 25h shift on that day
 # !N1           no 12.5h day shift (no 25h shift either, but 12.5h night shift possible)
@@ -34,10 +34,11 @@ write.template(file = "template.csv", start_date = start_date, end_date = end_da
 # N,8,etc       positive request of a shift - please use this restrictively, as it greatly reduces degrees of freedom
 # N?            positive request of a shift (soft request) - please use this restrictively, as it greatly reduces degrees of freedom
 
+# INPUT FOR wards.xlsx is numeric, defining min presence per day and ward
 
-doctors <- read.doctors("doctors.csv")
-requests <- read.requests("requests.csv")
-wards <- read.wards("wards.min_presence.csv")
+
+requests <- read.requests("requests.xlsx", doctors = doctors)
+wards <- read.wards("wards.xlsx", doctors = doctors)
 
 
 # CREATE ONE SCHEDULE
@@ -81,14 +82,4 @@ wards                   <- out$wards
 opt_parms               <- out$opt_parms
 warnings                <- out$warnings
 
-wards$min_presence <- rbind(wards$min_presence, sum = colSums(wards$min_presence))
-wards$presence     <- rbind(wards$presence,     sum = colSums(wards$presence))
-wards$day_presence_missing <- wards$presence - wards$min_presence
-
-
-write.csv(schedule, file = "schedule.csv", quote = FALSE)
-write.csv(requests, file = "requests.out.csv", quote = FALSE)
-write.csv(doctors, file = "doctors.stats.csv", quote = FALSE)
-write.csv(wards$day_presence_missing, file = "wards.presence_missing.csv", quote = FALSE)
-write.csv(warnings, file = "warnings.list", quote = FALSE)
-write.csv(opt_parms, file = "opt_parms.csv", quote = FALSE)
+write.schedule(schedule = schedule, wards = wards, doctors = doctors, opt_parms = opt_parms)
