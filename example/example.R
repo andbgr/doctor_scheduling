@@ -65,7 +65,7 @@ system.time(
 out <- optimal.schedule(doctors = doctors, 
                         requests = requests, 
                         wards = wards, 
-                        n.iterations = 1000, 
+                        n.iterations = 7000, 
                         weights = list(soft_requests = 0.5, 
                                        r.shifts = 2, 
                                        r.weekends = 2, 

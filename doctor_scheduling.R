@@ -1,7 +1,6 @@
 # TODO: Description
 # TODO: also write doctors template
-# TODO: issue: a request for N2 will always be ignored if there is a request for N, use a binary mask for soft requests
-# TODO: make shifts a factor, then use it for input validation
+# TODO: make shifts a factor, then use it for input validation, use a binary mask for soft requests
 require(Hmisc)
 require(xlsx)
 
@@ -35,6 +34,8 @@ read.doctors <- function(file = "doctors.csv")
 	
 	doctors$split_shifts  <- doctors$split_shifts == "yes"
 	doctors$friday_sunday <- doctors$friday_sunday == "yes"
+	
+	doctors$fill_days_beyond_weekhours <- doctors$fill_days_beyond_weekhours == "yes"
 	
 # 	doctors$number_of_shifts_factor <- rep(1)
 # 	if(all(c("less", "more") %in% doctors$number_of_shifts))
@@ -94,7 +95,7 @@ read.doctors <- function(file = "doctors.csv")
 # {
 # 	dates <- as.character(seq(from=start_date, to=end_date, by=1))
 # 	
-# 	template <- matrix(rep(""), length(rownames(doctors)), length(dates), dimnames = list(rownames(doctors), as.character(dates)))
+# 	template <- matrix(rep(""), nrow(doctors), length(dates), dimnames = list(rownames(doctors), as.character(dates)))
 # 	
 # 	if(!is.na(date_format))
 # 		colnames(template) <- format(as.Date(colnames(template)), date_format)
@@ -110,7 +111,7 @@ write.templates <- function(start_date, end_date, doctors = read.doctors("doctor
 {
 	dates <- seq(from=start_date, to=end_date, by=1)
 	
-	template <- matrix(rep(""), length(rownames(doctors)), length(dates), dimnames = list(rownames(doctors), format(dates, format="%d")))
+	template <- matrix(rep(""), nrow(doctors), length(dates), dimnames = list(rownames(doctors), format(dates, format="%d")))
 	
 	# here begins the xlsx stuff
 	wb <- createWorkbook()
@@ -148,9 +149,32 @@ write.templates <- function(start_date, end_date, doctors = read.doctors("doctor
 	autoSizeColumn(sheet, 1)
 	for(column in 2:(length(dates)+1))
 	{
-		setColumnWidth(sheet, column, 5)
+		setColumnWidth(sheet, column, 4.5)
 	}
 	
+	explanation <- c("!N", "Kein Nachtdienst (auch kein N1 oder N2)",
+	                 "!N1", "Kein N1 (auch kein N, aber N2 möglich)",
+	                 "!N2", "Kein N2 (auch kein N, aber N1 möglich)",
+	                 "U,ZA,NG", "Urlaub/Zeitausgleich/Nachtdienstgutstunden",
+	                 "-", "Freier Tag mit 0h",
+	                 "5,6,7,8", "Normaler 5/6/7/8h-Tag",
+	                 "<5,<6,<7,<8", "5/6/7/8h oder weniger (also auch X, FT, oder -)",
+	                 "FB5,FB6,FB7,FB8", "Fortbildung 5/6/7/8h (Arbeitszeit ohne Stationspräsenz)",
+	                 "!N?", "Kein N gewünscht (aber möglich)",
+	                 "!N1?", "wie oben",
+	                 "!N2?", "wie oben",
+	                 "N?", "Nachtdienst gewünscht (aber nicht garantiert da es die Planung stark einschränkt)",
+	                 "*?", "'?' kann für alle obigen Dienstformen verwendet werden, z.B. '7?'",
+	                 "N", "Nachtdienst fix geplant - nur für Weihnachten o.Ä. vorgesehen")
+	explanation <- matrix(explanation, ncol=2, byrow=TRUE)
+	
+	for(row in (nrow(doctors)+3):(nrow(doctors)+nrow(explanation)+2))
+	{
+		addMergedRegion(sheet, row, row, 2, 16)
+	}
+	
+	addDataFrame(explanation, sheet, row.names = FALSE, col.names = FALSE, startRow = nrow(doctors) + 3)
+
 	if(file.exists("requests.xlsx"))
 	{
 		message("WARNING: File 'requests.xlsx' already exists, cowardly refusing to overwrite")
@@ -201,7 +225,7 @@ write.templates <- function(start_date, end_date, doctors = read.doctors("doctor
 	autoSizeColumn(sheet, 1)
 	for(column in 2:(length(dates)+1))
 	{
-		setColumnWidth(sheet, column, 5)
+		setColumnWidth(sheet, column, 4.5)
 	}
 	
 	if(file.exists("wards.xlsx"))
@@ -227,7 +251,7 @@ write.schedule <- function(schedule = NA, wards = NA, doctors = NA, opt_parms = 
 	wb <- createWorkbook()
 	sheet <- createSheet(wb, sheetName=format(start_date, format="%Y-%m"))
 	addDataFrame(as.data.frame(schedule), sheet)
-	addDataFrame(as.data.frame(wards$presence - wards$min_presence), sheet, col.names = FALSE, startRow = length(rownames(doctors)) + 3)
+	addDataFrame(as.data.frame(rbind(wards$presence - wards$min_presence, colSums(wards$presence - wards$min_presence))), sheet, col.names = FALSE, startRow = nrow(doctors) + 3)
 	rows  <- getRows(sheet)
 	cells <- getCells(rows)
 	
@@ -293,22 +317,56 @@ write.schedule <- function(schedule = NA, wards = NA, doctors = NA, opt_parms = 
 	{
 		if(is.workday(dates[day]))
 		{
-			for(row in seq_along(rownames(wards$presence_missing)))
+			for(row in 1:(nrow(wards$presence)))
 			{
-				value <- getCellValue(cells[[paste(row + length(rownames(doctors)) + 2, day + 1, sep = ".")]])
+				value <- getCellValue(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]])
 				if(value < 0)
-					setCellStyle(cells[[paste(row + length(rownames(doctors)) + 2, day + 1, sep = ".")]], cellstyle.red1)
+					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.red1)
 				if(value < -1)
-					setCellStyle(cells[[paste(row + length(rownames(doctors)) + 2, day + 1, sep = ".")]], cellstyle.red2)
+					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.red2)
 				if(value < -2)
-					setCellStyle(cells[[paste(row + length(rownames(doctors)) + 2, day + 1, sep = ".")]], cellstyle.red3)
+					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.red3)
 				if(value > 0)
-					setCellStyle(cells[[paste(row + length(rownames(doctors)) + 2, day + 1, sep = ".")]], cellstyle.green1)
-				if(value > 1)
-					setCellStyle(cells[[paste(row + length(rownames(doctors)) + 2, day + 1, sep = ".")]], cellstyle.green2)
-				if(value > 2)
-					setCellStyle(cells[[paste(row + length(rownames(doctors)) + 2, day + 1, sep = ".")]], cellstyle.green3)
+					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.green1)
+				if(value >= 2)
+					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.green2)
+				if(value >= 3)
+					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.green3)
 			}
+		}
+	}
+	
+	# the following is only for a line to separate the sum
+	# for some reason, getCellStyle doesn't work, which would have made this easier
+	cellstyle.red3 <- cellstyle.red3 + Border(color="black", position = "TOP")
+	cellstyle.red2 <- cellstyle.red2 + Border(color="black", position = "TOP")
+	cellstyle.red1 <- cellstyle.red1 + Border(color="black", position = "TOP")
+	cellstyle.green1 <- cellstyle.green1 + Border(color="black", position = "TOP")
+	cellstyle.green2 <- cellstyle.green2 + Border(color="black", position = "TOP")
+	cellstyle.green3 <- cellstyle.green3 + Border(color="black", position = "TOP")
+	cellstyle.neutral <- CellStyle(wb) + Border(color="black", position = "TOP")
+	for(day in seq_along(dates))
+	{
+		if(is.workday(dates[day]))
+		{
+			value <- getCellValue(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]])
+			if(value == 0)
+				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.neutral)
+			if(value < 0)
+				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.red1)
+			if(value < -1)
+				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.red2)
+			if(value < -2)
+				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.red3)
+			if(value > 0)
+				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.green1)
+			if(value >= 2)
+				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.green2)
+			if(value >= 3)
+				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.green3)
+		} else
+		{
+			setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.neutral)
 		}
 	}
 	
@@ -316,12 +374,20 @@ write.schedule <- function(schedule = NA, wards = NA, doctors = NA, opt_parms = 
 	autoSizeColumn(sheet, 1)
 	for(column in 2:(length(dates)+1))
 	{
-		setColumnWidth(sheet, column, 5)
+		setColumnWidth(sheet, column, 4.5)
 	}
 	
 	
 	sheet2 <- createSheet(wb, sheetName="doctors.stats")
 	addDataFrame(as.data.frame(doctors), sheet2)
+# 	for(column in 1:(length(dates)+1))
+# 	{
+# 		autoSizeColumn(sheet2, column)
+# 	}
+	
+	
+	sheet3 <- createSheet(wb, sheetName="opt_parms")
+	addDataFrame(as.data.frame(opt_parms), sheet3)
 # 	for(column in 1:(length(dates)+1))
 # 	{
 # 		autoSizeColumn(sheet2, column)
@@ -339,7 +405,7 @@ write.schedule <- function(schedule = NA, wards = NA, doctors = NA, opt_parms = 
 read.requests <- function(file = "requests.xlsx", doctors = read.doctors("doctors.csv"))
 {
 	#colClasses="character" doesn't seem to work, it is coerced to factor
-	raw <- read.xlsx(file, sheetIndex=1, rowIndex=0:length(rownames(doctors)) + 1, colClasses="character")
+	raw <- read.xlsx(file, sheetIndex=1, rowIndex=0:nrow(doctors) + 1, colClasses="character")
 	raw <- as.matrix(raw)
 	raw[is.na(raw)] <- ""
 	# i have no idea why colnames are prefixed with "X" when reading xlsx
@@ -686,10 +752,10 @@ count.requests.granted <- function(requests, schedule)
 pick.doctor <- function(doctors, sort_by, jitter = FALSE)
 {
 	# TODO: Description
-	if(length(rownames(doctors)) == 1)
+	if(nrow(doctors) == 1)
 		return(rownames(doctors)[1])
 	
-	out <- matrix(numeric(), length(rownames(doctors)), 2, dimnames = list(rownames(doctors), c("sort_value", "enough")))
+	out <- matrix(numeric(), nrow(doctors), 2, dimnames = list(rownames(doctors), c("sort_value", "enough")))
 	if(sort_by == "hours")
 	{
 		out[,"sort_value"] <- doctors$hours / doctors$hours_min_work
@@ -729,6 +795,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 {
 	warnings <- NULL
 	opt_parms <- list(n.unresolved = 0, n.requests_denied = 0, n.soft_requests = 0, n.soft_requests_granted = 0, range.shifts = NA, range.weekends = NA, range.nights = NA, n.splittable = NA, n.split = NA, day_presence_missing = NA, day_presence_missing.squared = NA)
+	
 	days <- seq_along(colnames(requests))
 	dates <- as.Date(colnames(requests))
 	
@@ -743,7 +810,8 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	is_fridaylike <- is.fridaylike(dates)
 	is_splitday <- is_workday & !is_fridaylike
 	
-	schedule <- matrix(rep(""), length(rownames(doctors)), length(days), dimnames = list(rownames(doctors), as.character(dates)))
+	schedule <- matrix(rep(""), nrow(doctors), length(days), dimnames = list(rownames(doctors), as.character(dates)))
+	
 	requests.orig <- requests
 	requests <- strip.requests(requests, hardmode = hardmode)
 	
@@ -770,7 +838,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	### preliminary - just enter days off ###########################################################
 	for(day in days)
 	{
-		schedule[,day][requests[,day] %in% c(holiday_shifts, "FT")] <- requests[,day][requests[,day] %in% c(holiday_shifts, "FT")]
+		schedule[,day][requests[,day] %in% c(holiday_shifts, "FT", "-")] <- requests[,day][requests[,day] %in% c(holiday_shifts, "FT", "-")]
 	}
 	
 	
@@ -862,7 +930,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		
 		# TODO: only on weekdays
 		# TODO: resulting day presence can still be -1 if doctor from the same ward gets X *after* this
-		provisional_day_presence_allowing <- rep(TRUE, length(rownames(doctors)))
+		provisional_day_presence_allowing <- rep(TRUE, nrow(doctors))
 		if(is_workday[day])
 		{
 			provisional_day_presence <- schedule[,day] != "X" & !requests[,day] %in% c("FT", day_shifts_absent, holiday_shifts)
@@ -878,7 +946,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			message("ignoring PDP: ", appendLF = FALSE)
 		
 		
-		provisional_next_day_presence_allowing <- rep(TRUE, length(rownames(doctors)))
+		provisional_next_day_presence_allowing <- rep(TRUE, nrow(doctors))
 		if(next_day %in% days && is_workday[next_day])
 		{
 			provisional_next_day_presence <- schedule[,next_day] != "N2" & !requests[,next_day] %in% c("N2", "FT", day_shifts_absent, holiday_shifts)
@@ -1316,7 +1384,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			date <- dates[day]
 # 			message(date, ": ", ward, ": ", appendLF = FALSE)
 			doctors.available <- doctors[,"ward"] == ward &
-			                     doctors[,"hours"] < doctors[,"hours_min_work"] &
+			                     (doctors[,"hours"] < doctors[,"hours_min_work"] | doctors$fill_days_beyond_weekhours) &
 			                     schedule[,day] == ""
 			if(sum(doctors.available) == 0)
 			{
