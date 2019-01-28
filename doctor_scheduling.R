@@ -1274,9 +1274,30 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			weekdays <- weekdays[!is_holiday[weekdays]]
 			if(any(schedule[doctor,weekdays] == "FT"))
 				next
+			# If there is a "-" in requests we allow ourselves to use it for FT
+			if(any(schedule[doctor,weekdays] == "-"))
+			{
+				schedule[doctor,weekdays][schedule[doctor,weekdays] == "-"][1] <- "FT"
+				next
+			}
 			weekdays <- weekdays[schedule[doctor,weekdays] == ""]
 			if(length(weekdays) == 0)
-				next  #TODO: some message here
+			{
+				weekdays <- seq(from=saturday + 2, to=saturday + 6, by=1)
+				weekdays <- weekdays[weekdays %in% days]
+				weekdays <- weekdays[!is_holiday[weekdays]]
+				if(any(schedule[doctor,weekdays] == "FT"))
+					next
+				# If there is a "-" in requests we allow ourselves to use it for FT
+				if(any(schedule[doctor,weekdays] == "-"))
+				{
+					schedule[doctor,weekdays][schedule[doctor,weekdays] == "-"][1] <- "FT"
+					next
+				}
+				weekdays <- weekdays[schedule[doctor,weekdays] == ""]
+				if(length(weekdays) == 0)
+					next # some warning here
+			}
 			# Find day with least absences on the ward
 			ward <- as.character(doctors[doctor,"ward"])
 			if(length(weekdays) > 1)
