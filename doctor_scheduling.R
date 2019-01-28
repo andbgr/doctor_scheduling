@@ -10,11 +10,13 @@ require(xlsx)
 ### static variables
 # TODO: once this is a package, see to it that these can not be overwritten
 
+N_shifts <- c("N", "N1", "N2")
+holiday_shifts <- c("U", "ZA", "NG")
 day_shifts <- c("5", "6", "7", "8", "8.5", "9", "10")
 day_shifts_absent <- c("FB5", "FB6", "FB7", "FB8")
 day_requests <- c(day_shifts, day_shifts_absent, "<5", "<6", "<7", "<8", "<9", "<10")
-N_shifts <- c("N", "N1", "N2")
-holiday_shifts <- c("U", "SU", "ZA", "NG")
+valid_shifts <- c(N_shifts, holiday_shifts, day_shifts, day_shifts_absent, "X", "FT", "-")
+valid_requests <- c("!N", "!N1", "!N2", N_shifts, holiday_shifts, day_requests, "X", "FT", "-")
 
 if(file.exists("holidays.list"))
 {
@@ -418,6 +420,23 @@ read.requests <- function(file = "requests.xlsx", doctors = read.doctors("doctor
 	
 	# change U or ZA on holidays to !N
 	requests[,!is.workday(colnames(requests))][requests[,!is.workday(colnames(requests))] %in% c("U", "ZA")] <- "!N"
+	
+	valid_input <- c(valid_requests, paste(valid_requests, "?", sep=""), "")
+	if(!all(requests %in% valid_input))
+	{
+		errors <- character(0)
+		for(doctor in rownames(requests))
+		{
+			for(day in seq_along(colnames(requests)))
+			{
+				if(!requests[doctor,day] %in% valid_input)
+					errors <- c(errors, paste("Doctor ", doctor, ", day ", day, ": unrecognized input '", requests[doctor,day], "'\n", sep=""))
+			}
+		}
+		errors <- c(errors, "Valid input is: ", paste(valid_input, collapse=", "))
+		stop(errors)
+	}
+	
 	return(requests)
 }
 
@@ -819,7 +838,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	hours_min <- sum(is_workday) * 8
 	# TODO: take weekhours into account for non-40h-doctors
 	doctors$hours_min <- hours_min
-	doctors$hours_min_work <- doctors$hours_min - rowSums(requests == "U" | requests == "SU" | requests == "ZA" | requests == "NG") * 8 #TODO
+	doctors$hours_min_work <- doctors$hours_min - rowSums(requests == "U" | requests == "ZA" | requests == "NG") * 8 #TODO
 	doctors$hours_max_work <- doctors$hours_min_work * (doctors$weekhours_max / 40)
 	# TODO: this may not be entirely correct
 # 	doctors$hours_max_AZG <- floor((doctors$hours_min - rowSums(requests == "U") * 8) * (48 / 40))
