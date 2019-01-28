@@ -22,21 +22,6 @@ write.templates(start_date = start_date, end_date = end_date, doctors = doctors)
 # ...FILL requests.xlsx AND wards.xlsx
 
 
-# ACCEPTABLE INPUT for requests.xlsx:
-# X             end of night shift (only on first day)
-# !N            no 25h shift on that day
-# !N1           no 12.5h day shift (no 25h shift either, but 12.5h night shift possible)
-# !N2           no 12.5h night shift (no 25h shift either, but 12.5h day shift possible)
-# 5,6,7,8       5h day shift, etc
-# <5,<6,<7,<8   5h or less (so no NX shifts either)
-# U,ZA,NG       holiday shifts
-# !N?,8?, etc   like above, but as *would be nice* (soft request)
-# N,8,etc       positive request of a shift - please use this restrictively, as it greatly reduces degrees of freedom
-# N?            positive request of a shift (soft request) - please use this restrictively, as it greatly reduces degrees of freedom
-
-# INPUT FOR wards.xlsx is numeric, defining min presence per day and ward
-
-
 requests <- read.requests("requests.xlsx", doctors = doctors)
 wards <- read.wards("wards.xlsx", doctors = doctors)
 
