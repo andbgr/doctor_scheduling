@@ -192,7 +192,7 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 	
 	# here begins the xlsx stuff
 	wb <- createWorkbook()
-	sheet.schedule <- createSheet(wb, sheetName=format(start_date, format="%Y-%m"))
+	sheet.schedule <- createSheet(wb, sheetName="schedule")
 	addDataFrame(as.data.frame(schedule), sheet.schedule)
 	addDataFrame(as.data.frame(rbind(wards$presence - wards$min_presence, colSums(wards$presence - wards$min_presence))), sheet.schedule, col.names = FALSE, startRow = nrow(doctors) + 3)
 	rows  <- getRows(sheet.schedule)
@@ -269,7 +269,7 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.red2)
 				if(value < -2)
 					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.red3)
-				if(value > 0)
+				if(value >= 1)
 					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.green1)
 				if(value >= 2)
 					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.green2)
@@ -301,7 +301,7 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.red2)
 			if(value < -2)
 				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.red3)
-			if(value > 0)
+			if(value >= 1)
 				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.green1)
 			if(value >= 2)
 				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.green2)
@@ -858,30 +858,30 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		provisional_day_presence_allowing <- rep(TRUE, nrow(doctors))
 		if(is_workday[day])
 		{
-			provisional_day_presence <- schedule[,day] != "X" & !requests[,day] %in% c("FT", day_shifts_absent, holiday_shifts)
+			provisional_day_presence <- schedule[,day] != "X" & !requests[,day] %in% c("FT", "-", day_shifts_absent, holiday_shifts)
 			for (ward in levels(doctors$ward))
 			{
 				provisional_day_presence_allowing[doctors$ward == ward] <- sum(provisional_day_presence[doctors$ward == ward]) > wards$min_presence[ward,day]
 			}
 			# also forbid if resulting total presence would be < -2
 			# TODO: this should not be a general rule
-			provisional_day_presence_allowing <- provisional_day_presence_allowing & sum(!requests[,day] %in% c("FT", day_shifts_absent, holiday_shifts)) > sum(wards$min_presence[,day]) - 1
+			provisional_day_presence_allowing <- provisional_day_presence_allowing & sum(!requests[,day] %in% c("FT", "-", day_shifts_absent, holiday_shifts)) > sum(wards$min_presence[,day]) - 1
 		}
 		if(!any(provisional_day_presence_allowing))
-			message("ignoring PDP: ", appendLF = FALSE)
+			warnings <- c(warnings, warning(date, ": No split possible based on provisional day presence"))
 		
 		
 		provisional_next_day_presence_allowing <- rep(TRUE, nrow(doctors))
 		if(next_day %in% days && is_workday[next_day])
 		{
-			provisional_next_day_presence <- schedule[,next_day] != "N2" & !requests[,next_day] %in% c("N2", "FT", day_shifts_absent, holiday_shifts)
+			provisional_next_day_presence <- schedule[,next_day] != "N2" & !requests[,next_day] %in% c("N2", "FT", "-", day_shifts_absent, holiday_shifts)
 			for (ward in levels(doctors$ward))
 			{
 				provisional_next_day_presence_allowing[doctors$ward == ward] <- sum(provisional_next_day_presence[doctors$ward == ward]) > wards$min_presence[ward,next_day] - 1
 			}
 		}
 		if(!any(provisional_next_day_presence_allowing))
-			message("ignoring PNDP: ", appendLF = FALSE)
+			warnings <- c(warnings, warning(date, ": ignoring provisional next day presence in choosing doctor for N"))
 		
 		
 		doctors.available.for.N <- schedule[,day] != "X" & requests[,day] == ""
@@ -923,7 +923,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			if(sum(doctors.available) == 0)
 			{
 				message("skipping day")
-				warnings <- c(warnings, warning(date, ": skipping day"))
+				warnings <- c(warnings, warning(date, ": No doctor found for N or N1"))
 				opt_parms$n.unresolved <- opt_parms$n.unresolved + 1
 				next
 			}
@@ -944,7 +944,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			if(sum(doctors.available) == 0)
 			{
 				message("skipping day")
-				warnings <- c(warnings, warning(date, ": skipping day"))
+				warnings <- c(warnings, warning(date, ": No doctor found for N or N1"))
 				opt_parms$n.unresolved <- opt_parms$n.unresolved + 1
 				next
 			}
@@ -991,7 +991,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 				if(sum(doctors.available) == 0)
 				{
 					message("skipping N2")
-					warnings <- c(warnings, warning(date, ": skipping N2"))
+					warnings <- c(warnings, warning(date, ": No doctor found for N2"))
 					opt_parms$n.unresolved <- opt_parms$n.unresolved + 1
 					next
 				}
@@ -1189,6 +1189,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			weekdays <- weekdays[schedule[doctor,weekdays] == ""]
 			if(length(weekdays) == 0)
 			{
+				warnings <- c(warnings, warning("Unable to assign FT for ", doctor, " in this week, trying next week..."))
 				weekdays <- seq(from=saturday + 2, to=saturday + 6, by=1)
 				weekdays <- weekdays[weekdays %in% days]
 				weekdays <- weekdays[!is_holiday[weekdays]]
@@ -1202,7 +1203,10 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 				}
 				weekdays <- weekdays[schedule[doctor,weekdays] == ""]
 				if(length(weekdays) == 0)
-					next # some warning here
+				{
+					warnings <- c(warnings, warning("Unable to assign FT for ", doctor))
+					next
+				}
 			}
 			# Find day with least absences on the ward
 			ward <- as.character(doctors[doctor,"ward"])
@@ -1271,7 +1275,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			if(sum(doctors.available) == 0)
 			{
 # 				message("no doctor")
-				warnings <- c(warnings, warning("No more doctor found for ", day, ", ward ", ward, " presence remains ", wards$presence[ward,day]))
+# 				warnings <- c(warnings, warning("No more doctor found for ", day, ", ward ", ward, " presence remains ", wards$presence[ward,day]))
 				workdays.shuffled <- workdays.shuffled[!workdays.shuffled == day]
 				next
 			}
@@ -1303,7 +1307,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		if(sum(doctors.available) == 0)
 		{
 # 			message("no doctor")
-			warnings <- c(warnings, warning("No more doctor found for ", day, ", total presence remains ", sum(wards$presence[,day])))
+# 			warnings <- c(warnings, warning("No more doctor found for ", day, ", total presence remains ", sum(wards$presence[,day])))
 			workdays.shuffled <- workdays.shuffled[!workdays.shuffled == day]
 			next
 		}
