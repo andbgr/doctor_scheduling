@@ -2,7 +2,7 @@
 # TODO: also write doctors template
 # TODO: make shifts a factor, then use it for input validation, use a binary mask for soft requests
 require(Hmisc)
-require(xlsx)
+require(xlsx) # This is pathetic, but the only way we can output formatted (and editable, so no LaTeX) data seems to be xlsx
 
 
 
@@ -30,14 +30,14 @@ if(file.exists("holidays.list"))
 
 
 # TODO: input validation
-read.doctors <- function(file = "doctors.csv")
+read.doctors <- function(file = "doctors.xlsx")
 {
-	doctors <- read.csv(file, row.names = 1)
+	doctors <- read.xlsx("doctors.xlsx", sheetIndex=1, row.names = TRUE)
 	
 	doctors$split_shifts  <- doctors$split_shifts == "yes"
 	doctors$friday_sunday <- doctors$friday_sunday == "yes"
 	
-	doctors$fill_days_beyond_weekhours <- doctors$fill_days_beyond_weekhours == "yes"
+	doctors$fill_all_days <- doctors$fill_all_days == "yes"
 	
 # 	doctors$number_of_shifts_factor <- rep(1)
 # 	if(all(c("less", "more") %in% doctors$number_of_shifts))
@@ -93,65 +93,63 @@ read.doctors <- function(file = "doctors.csv")
 
 
 
-# write.template.csv <- function(file = "template.csv", start_date, end_date, doctors = read.doctors(), date_format = NA)
-# {
-# 	dates <- as.character(seq(from=start_date, to=end_date, by=1))
-# 	
-# 	template <- matrix(rep(""), nrow(doctors), length(dates), dimnames = list(rownames(doctors), as.character(dates)))
-# 	
-# 	if(!is.na(date_format))
-# 		colnames(template) <- format(as.Date(colnames(template)), date_format)
-# 	write.csv(template, file = file, quote = FALSE)
-# }
-
-
-
-
 # XLSX version
 # this is a bit tedious, but we can have formatted spreadsheets
-write.templates <- function(start_date, end_date, doctors = read.doctors("doctors.csv"))
+write.template <- function(start_date, end_date, doctors = read.doctors("doctors.csv"))
 {
+	if(file.exists("input.xlsx"))
+	{
+		return(warning("File 'input.xlsx' already exists, cowardly refusing to overwrite"))
+	}
+	
 	dates <- seq(from=start_date, to=end_date, by=1)
 	
-	template <- matrix(rep(""), nrow(doctors), length(dates), dimnames = list(rownames(doctors), format(dates, format="%d")))
+	requests <- matrix(rep(""), nrow(doctors), length(dates), dimnames = list(rownames(doctors), format(dates, format="%d")))
+	wards_min_presence <- matrix(rep(""), length(unique(doctors$ward)), length(dates), dimnames = list(unique(doctors$ward), format(dates, format="%d")))
 	
-	# here begins the xlsx stuff
 	wb <- createWorkbook()
-	sheet <- createSheet(wb, sheetName=format(start_date, format="%Y-%m"))
-	addDataFrame(as.data.frame(template), sheet)
-	rows  <- getRows(sheet)
-	cells <- getCells(rows)
 	
-	# YYYY-MM in topleft cell
-	setCellValue(cells[["1.1"]], format(start_date, format="%Y-%m"))
-	
-	cellstyle.table <- CellStyle(wb) + Border(color="black", position = c("TOP", "LEFT", "BOTTOM", "RIGHT"))
-	for(day in seq_along(dates))
+	for(i in c("requests", "wards_min_presence"))
 	{
-		for(row in seq_along(rownames(doctors)))
+		# here begins the xlsx stuff
+		sheetname <- paste0("sheet.", i)
+		assign(sheetname, createSheet(wb, sheetName=i))
+		addDataFrame(as.data.frame(get(i)), get(sheetname))
+		rows  <- getRows(get(sheetname))
+		cells <- getCells(rows)
+		
+		# YYYY-MM in topleft cell
+		setCellValue(cells[["1.1"]], format(start_date, format="%Y-%m"))
+		
+		cellstyle.table <- CellStyle(wb) + Border(color="black", position = c("TOP", "LEFT", "BOTTOM", "RIGHT"))
+		for(day in seq_along(dates))
 		{
-			setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.table)
-		}
-	}
-	
-	# Colored background for weekends
-	cellstyle.holiday <- cellstyle.table + Fill(foregroundColor="#add8e6")
-	for(day in seq_along(dates))
-	{
-		if(!is.workday(dates[day]))
-		{
-			for(row in seq_along(rownames(doctors)))
+			for(row in 1:nrow(get(i)))
 			{
-				setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.holiday)
+				setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.table)
 			}
 		}
-	}
-	
-	# Resize Columns
-	autoSizeColumn(sheet, 1)
-	for(column in 2:(length(dates)+1))
-	{
-		setColumnWidth(sheet, column, 4.5)
+		
+		# Colored background for weekends
+		cellstyle.holiday <- cellstyle.table + Fill(foregroundColor="#add8e6")
+		for(day in seq_along(dates))
+		{
+			if(!is.workday(dates[day]))
+			{
+				for(row in 1:nrow(get(i)))
+				{
+					setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.holiday)
+				}
+			}
+		}
+		
+		# Resize Columns
+		setColumnWidth(get(sheetname), 1, 13.5)
+		for(column in 2:(length(dates)+1))
+		{
+			setColumnWidth(get(sheetname), column, 4.5)
+		}
+		setRowHeight(rows, multiplier = 1)
 	}
 	
 	explanation <- c("!N", "Kein Nachtdienst (auch kein N1 oder N2)",
@@ -172,89 +170,32 @@ write.templates <- function(start_date, end_date, doctors = read.doctors("doctor
 	
 	for(row in (nrow(doctors)+3):(nrow(doctors)+nrow(explanation)+2))
 	{
-		addMergedRegion(sheet, row, row, 2, 16)
+		addMergedRegion(sheet.requests, row, row, 2, 16)
 	}
 	
-	addDataFrame(explanation, sheet, row.names = FALSE, col.names = FALSE, startRow = nrow(doctors) + 3)
+	addDataFrame(explanation, sheet.requests, row.names = FALSE, col.names = FALSE, startRow = nrow(doctors) + 3)
 
-	if(file.exists("requests.xlsx"))
-	{
-		message("WARNING: File 'requests.xlsx' already exists, cowardly refusing to overwrite")
-	} else
-	{
-		saveWorkbook(wb, "requests.xlsx")
-	}
 	
 	
 	
-	
-	# ward min presence table
-	template <- matrix(rep(""), length(unique(doctors$ward)), length(dates), dimnames = list(unique(doctors$ward), format(dates, format="%d")))
-	
-	# here begins the xlsx stuff
-	wb <- createWorkbook()
-	sheet <- createSheet(wb, sheetName=format(start_date, format="%Y-%m"))
-	addDataFrame(as.data.frame(template), sheet)
-	rows  <- getRows(sheet)
-	cells <- getCells(rows)
-	
-	# YYYY-MM in topleft cell
-	setCellValue(cells[["1.1"]], format(start_date, format="%Y-%m"))
-	
-	cellstyle.table <- CellStyle(wb) + Border(color="black", position = c("TOP", "LEFT", "BOTTOM", "RIGHT"))
-	for(day in seq_along(dates))
-	{
-		for(row in seq_along(unique(doctors$ward)))
-		{
-			setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.table)
-		}
-	}
-	
-	# Colored background for weekends
-	cellstyle.holiday <- cellstyle.table + Fill(foregroundColor="#add8e6")
-	for(day in seq_along(dates))
-	{
-		if(!is.workday(dates[day]))
-		{
-			for(row in seq_along(unique(doctors$ward)))
-			{
-				setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.holiday)
-			}
-		}
-	}
-	
-	# Resize Columns
-	autoSizeColumn(sheet, 1)
-	for(column in 2:(length(dates)+1))
-	{
-		setColumnWidth(sheet, column, 4.5)
-	}
-	
-	if(file.exists("wards.xlsx"))
-	{
-		message("WARNING: File 'wards.xlsx' already exists, cowardly refusing to overwrite")
-	} else
-	{
-		saveWorkbook(wb, "wards.xlsx")
-	}
+	saveWorkbook(wb, "input.xlsx")
 }
 
 
 
 
-# XLSX version
 # this is a bit tedious, but we can have formatted spreadsheets
-write.schedule <- function(schedule = NA, wards = NA, doctors = NA, opt_parms = NA)
+write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = NA, warnings = NA)
 {
 	dates <- as.Date(colnames(schedule))
 	colnames(schedule) <- format(dates, format="%d")
 	
 	# here begins the xlsx stuff
 	wb <- createWorkbook()
-	sheet <- createSheet(wb, sheetName=format(start_date, format="%Y-%m"))
-	addDataFrame(as.data.frame(schedule), sheet)
-	addDataFrame(as.data.frame(rbind(wards$presence - wards$min_presence, colSums(wards$presence - wards$min_presence))), sheet, col.names = FALSE, startRow = nrow(doctors) + 3)
-	rows  <- getRows(sheet)
+	sheet.schedule <- createSheet(wb, sheetName=format(start_date, format="%Y-%m"))
+	addDataFrame(as.data.frame(schedule), sheet.schedule)
+	addDataFrame(as.data.frame(rbind(wards$presence - wards$min_presence, colSums(wards$presence - wards$min_presence))), sheet.schedule, col.names = FALSE, startRow = nrow(doctors) + 3)
+	rows  <- getRows(sheet.schedule)
 	cells <- getCells(rows)
 	
 	# YYYY-MM in topleft cell
@@ -373,30 +314,45 @@ write.schedule <- function(schedule = NA, wards = NA, doctors = NA, opt_parms = 
 	}
 	
 	# Resize Columns
-	autoSizeColumn(sheet, 1)
+	setColumnWidth(sheet.schedule, 1, 13.5)
 	for(column in 2:(length(dates)+1))
 	{
-		setColumnWidth(sheet, column, 4.5)
+		setColumnWidth(sheet.schedule, column, 4.5)
 	}
+	setRowHeight(rows, multiplier = 1)
 	
 	
-	sheet2 <- createSheet(wb, sheetName="doctors.stats")
-	addDataFrame(as.data.frame(doctors), sheet2)
-# 	for(column in 1:(length(dates)+1))
+	sheet.doctors.stats <- createSheet(wb, sheetName="doctors.stats")
+	addDataFrame(as.data.frame(doctors), sheet.doctors.stats)
+# 	for(column in 1:(ncol(doctors)+1))
 # 	{
-# 		autoSizeColumn(sheet2, column)
+# 		autoSizeColumn(sheet.doctors.stats, column)
 # 	}
 	
 	
-	sheet3 <- createSheet(wb, sheetName="opt_parms")
-	addDataFrame(as.data.frame(opt_parms), sheet3)
-# 	for(column in 1:(length(dates)+1))
+	sheet.opt_parms <- createSheet(wb, sheetName="opt_parms")
+	addDataFrame(as.data.frame(opt_parms), sheet.opt_parms)
+# 	for(column in 1:(length(opt_parms)+1))
 # 	{
-# 		autoSizeColumn(sheet2, column)
+# 		autoSizeColumn(sheet.opt_parms, column)
 # 	}
 	
 	
-	saveWorkbook(wb, "schedule.xlsx")
+	sheet.warnings <- createSheet(wb, sheetName="warnings")
+	addDataFrame(as.data.frame(warnings), sheet.warnings)
+	autoSizeColumn(sheet.warnings, 2)
+	
+	
+	
+	
+	filename <- "schedule.xlsx"
+	i <- 1
+	while(file.exists(filename))
+	{
+		filename <- paste0("schedule", i, ".xlsx")
+		i <- i + 1
+	}
+	saveWorkbook(wb, filename)
 }
 
 
@@ -404,10 +360,10 @@ write.schedule <- function(schedule = NA, wards = NA, doctors = NA, opt_parms = 
 
 # TODO: input validation
 # TODO: not very elegant, but this requires doctors as input to select relevant part of the xlsx file (and not comments etc)
-read.requests <- function(file = "requests.xlsx", doctors = read.doctors("doctors.csv"))
+read.input <- function(file = "input.xlsx", doctors = read.doctors("doctors.csv"))
 {
 	#colClasses="character" doesn't seem to work, it is coerced to factor
-	raw <- read.xlsx(file, sheetIndex=1, rowIndex=0:nrow(doctors) + 1, colClasses="character")
+	raw <- read.xlsx(file, sheetName="requests", rowIndex=0:nrow(doctors) + 1, colClasses="character")
 	raw <- as.matrix(raw)
 	raw[is.na(raw)] <- ""
 	# i have no idea why colnames are prefixed with "X" when reading xlsx
@@ -436,19 +392,12 @@ read.requests <- function(file = "requests.xlsx", doctors = read.doctors("doctor
 		errors <- c(errors, "Valid input is: ", paste(valid_input, collapse=", "))
 		stop(errors)
 	}
+		
 	
-	return(requests)
-}
-
-
-
-
-# TODO: input validation
-# TODO: not very elegant, but this requires doctors as input to select relevant part of the xlsx file (and not comments etc)
-read.wards <- function(file = "wards.xlsx", doctors = read.doctors("doctors.csv"))
-{
+	
+	
 	#colClasses="character" doesn't seem to work, it is coerced to factor
-	raw <- read.xlsx(file, sheetIndex=1, rowIndex=0:length(unique(doctors$ward)) + 1, colClasses="character")
+	raw <- read.xlsx(file, sheetName="wards_min_presence", rowIndex=0:length(unique(doctors$ward)) + 1, colClasses="character")
 	raw <- as.matrix(raw)
 	raw[is.na(raw)] <- ""
 	# i have no idea why colnames are prefixed with "X" when reading xlsx
@@ -456,54 +405,25 @@ read.wards <- function(file = "wards.xlsx", doctors = read.doctors("doctors.csv"
 	# i also don't know why "-" is converted to "." when reading xlsx
 	date.ym <- sub("\\.", "-", colnames(raw)[1])
 	
-	wards.min_presence <- raw[,-1]
-	dimnames(wards.min_presence) <- list(raw[,1], paste(date.ym, colnames(raw)[-1], sep = "-"))
+	wards_min_presence <- raw[,-1]
+	dimnames(wards_min_presence) <- list(raw[,1], paste(date.ym, colnames(raw)[-1], sep = "-"))
 	
-	mode(wards.min_presence) <- "numeric"
-	wards.min_presence[is.na(wards.min_presence)] <- 0
+	mode(wards_min_presence) <- "numeric"
+	wards_min_presence[is.na(wards_min_presence)] <- 0
 	
-	names <- rownames(wards.min_presence)
-	dates <- colnames(wards.min_presence)
+	names <- rownames(wards_min_presence)
+	dates <- colnames(wards_min_presence)
 	empty_matrix <- matrix(rep(0), length(names), length(dates), dimnames = list(names, as.character(dates)))
 	
-	wards <- list(min_presence    = wards.min_presence, 
+	wards <- list(min_presence    = wards_min_presence, 
 	              presence    = empty_matrix, 
 	              hours    = empty_matrix)
 	
-	return(wards)
+	
+	
+	
+	return(list(requests = requests, wards = wards))
 }
-
-
-
-
-# # TODO: input validation
-# read.requests.csv <- function(file = "requests.csv")
-# {
-# 	requests <- as.matrix(read.csv(file, row.names = 1, colClasses = "character", check.names = FALSE))
-# 	
-# 	# change U or ZA on holidays to !N
-# 	requests[,!is.workday(colnames(requests))][requests[,!is.workday(colnames(requests))] %in% c("U", "ZA")] <- "!N"
-# 	return(requests)
-# }
-
-
-
-
-# read.wards.csv <- function(file = "wards.min_presence.csv")
-# {
-# 	wards.min_presence <- as.matrix(read.csv(file, row.names = 1, check.names = FALSE))
-# 	wards.min_presence[is.na(wards.min_presence)] <- 0
-# 	
-# 	names <- rownames(wards.min_presence)
-# 	dates <- colnames(wards.min_presence)
-# 	empty_matrix <- matrix(rep(0), length(names), length(dates), dimnames = list(names, as.character(dates)))
-# 	
-# 	wards <- list(min_presence    = wards.min_presence, 
-# 	              presence    = empty_matrix, 
-# 	              hours    = empty_matrix)
-# 	
-# 	return(wards)
-# }
 
 
 
@@ -529,20 +449,6 @@ strip.requests <- function(requests, hardmode = FALSE)
 	}
 	return(requests)
 }
-
-
-
-
-# strip.wards <- function(wards = read.wards(), subset = NULL)
-# {
-# 	if(!subset %in% c("FA", "AA"))
-# 		return(NULL)
-# 	
-# 	out <- wards[grep(paste0("\\.", subset), names(wards))]
-# 	names(out) <- sub(paste0("\\.", subset), "", names(out))
-# 	
-# 	return(out)
-# }
 
 
 
@@ -1424,7 +1330,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			date <- dates[day]
 # 			message(date, ": ", ward, ": ", appendLF = FALSE)
 			doctors.available <- doctors[,"ward"] == ward &
-			                     (doctors[,"hours"] < doctors[,"hours_min_work"] | doctors$fill_days_beyond_weekhours) &
+			                     (doctors[,"hours"] < doctors[,"hours_min_work"] | doctors$fill_all_days) &
 			                     schedule[,day] == ""
 			if(sum(doctors.available) == 0)
 			{
@@ -1635,56 +1541,6 @@ optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(
 
 
 
-
-# optimal.schedule.both <- function(doctors = read.doctors(), requests = read.requests(), wards = read.wards(), n.iterations = 100)
-# {
-# 	doctors.FA <- subset(doctors, role == "FA")
-# 	doctors.AA <- subset(doctors, role == "AA")
-# 	requests.FA <- requests[doctors$role == "FA",]
-# 	requests.AA <- requests[doctors$role == "AA",]
-# 	wards.FA <- strip.wards(wards, subset = "FA")
-# 	wards.AA <- strip.wards(wards, subset = "AA")
-# 	
-# 	out.FA <- optimal.schedule(doctors = doctors.FA, requests = requests.FA, wards = wards.FA, n.iterations = n.iterations)
-# 	doctors.FA                 <- out.FA$doctors
-# 	requests.FA                <- out.FA$requests
-# 	schedule.FA                <- out.FA$schedule
-# 	wards.FA                   <- out.FA$wards
-# 	opt_parms.FA <- out.FA$opt_parms
-# 	warnings.FA                <- out.FA$warnings
-# 	
-# 	# make AA compensate for missing FA
-# 	day_presence_missing.FA <- wards.FA$presence - wards.FA$min_presence
-# 	day_presence_missing.FA[day_presence_missing.FA > 0] <- 0
-# 	wards.AA$min_presence <- wards.AA$min_presence - day_presence_missing.FA
-# 	
-# 	out.AA <- optimal.schedule(doctors = doctors.AA, requests = requests.AA, wards = wards.AA, n.iterations = n.iterations)
-# 	doctors.AA                 <- out.AA$doctors
-# 	requests.AA                <- out.AA$requests
-# 	schedule.AA                <- out.AA$schedule
-# 	wards.AA                   <- out.AA$wards
-# 	opt_parms.AA <- out.AA$opt_parms
-# 	warnings.AA                <- out.AA$warnings
-# 	
-# 	doctors  <- rbind(doctors.FA, doctors.AA)[rownames(doctors),]
-# 	requests <- rbind(requests.FA, requests.AA)[rownames(requests),]
-# 	schedule <- rbind(schedule.FA, schedule.AA)[rownames(requests),]
-# 	wards$presence    <- wards.FA$presence + wards.AA$presence
-# 	wards$presence.FA <- wards.FA$presence
-# 	wards$presence.AA <- wards.AA$presence
-# 	wards$hours    <- wards.FA$hours + wards.AA$hours
-# 	wards$hours.FA <- wards.FA$hours
-# 	wards$hours.AA <- wards.AA$hours
-# 	opt_parms <- NULL #TODO
-# 	warnings <- c(warnings.FA, warnings.AA)
-# 	
-# 	return(list(doctors = doctors, 
-# 	            requests = requests, 
-# 	            schedule = schedule, 
-# 	            wards = wards, 
-# 	            opt_parms = opt_parms,
-# 	            warnings = warnings))
-# }
 
 
 

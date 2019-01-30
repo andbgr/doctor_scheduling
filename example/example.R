@@ -15,15 +15,16 @@ source("doctor_scheduling.R")
 
 start_date <- as.Date("2019-02-01")
 end_date   <- as.Date("2019-02-28")
-doctors <- read.doctors("doctors.csv")
-write.templates(start_date = start_date, end_date = end_date, doctors = doctors)
+doctors <- read.doctors("doctors.xlsx")
+write.template(start_date = start_date, end_date = end_date, doctors = doctors)
 
 
-# ...FILL requests.xlsx AND wards.xlsx
+# ...NOW GO AND EDIT input.xlsx
 
 
-requests <- read.requests("requests.xlsx", doctors = doctors)
-wards <- read.wards("wards.xlsx", doctors = doctors)
+input <- read.input("input.xlsx", doctors = doctors)
+requests <- input$requests
+wards    <- input$wards
 
 
 # CREATE ONE SCHEDULE
@@ -47,24 +48,20 @@ wards <- read.wards("wards.xlsx", doctors = doctors)
 # how to weigh the different optimization parameters - higher is more important, 0 is disregard completely - TRY OUT DIFFERENT VALUES!
 
 system.time(
-out <- optimal.schedule(doctors = doctors, 
-                        requests = requests, 
-                        wards = wards, 
-                        n.iterations = 7000, 
-                        weights = list(soft_requests = 0.5, 
-                                       r.shifts = 2, 
-                                       r.weekends = 2, 
-                                       r.nights = 2, 
-                                       n.split = 0.5, 
-                                       day_presence = 2))
+out <- optimal.schedule(doctors = doctors, requests = requests, wards = wards, 
+                        n.iterations = 7000, weights = list(soft_requests = 0.5, 
+                                                            r.shifts = 2, 
+                                                            r.weekends = 2, 
+                                                            r.nights = 2, 
+                                                            n.split = 0.5, 
+                                                            day_presence = 2))
 )
 
 
 doctors                 <- out$doctors
-requests                <- out$requests
 schedule                <- out$schedule
 wards                   <- out$wards
 opt_parms               <- out$opt_parms
 warnings                <- out$warnings
 
-write.schedule(schedule = schedule, wards = wards, doctors = doctors, opt_parms = opt_parms)
+write.schedule(doctors = doctors, schedule = schedule, wards = wards, opt_parms = opt_parms, warnings = warnings)
