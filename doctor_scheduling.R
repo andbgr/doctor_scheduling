@@ -464,7 +464,7 @@ is.holiday <- function(dates)
 
 is.sunday <- function(dates)
 {
-	x <- weekdays(as.Date(dates)) == "Sunday"
+	x <- format(as.Date(dates), format = "%w") == "0"
 	return(x)
 }
 
@@ -473,7 +473,7 @@ is.sunday <- function(dates)
 
 is.saturday <- function(dates)
 {
-	x <- weekdays(as.Date(dates)) == "Saturday"
+	x <- format(as.Date(dates), format = "%w") == "6"
 	return(x)
 }
 
@@ -482,7 +482,7 @@ is.saturday <- function(dates)
 
 is.friday <- function(dates)
 {
-	x <- weekdays(as.Date(dates)) == "Friday"
+	x <- format(as.Date(dates), format = "%w") == "5"
 	return(x)
 }
 
