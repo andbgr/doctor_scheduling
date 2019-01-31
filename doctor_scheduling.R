@@ -295,7 +295,7 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 		if(is.workday(dates[day]))
 		{
 			value <- getCellValue(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]])
-			if(value == 0)
+			if(value >= 0)
 				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.neutral)
 			if(value < 0)
 				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.red1)
