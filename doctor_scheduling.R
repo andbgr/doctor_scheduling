@@ -1,7 +1,9 @@
 # TODO: Description
-# TODO: also write doctors template
-# TODO: make shifts a factor, then use it for input validation, use a binary mask for soft requests
-require(Hmisc)
+
+
+
+
+# require(Hmisc) # Seems this is no longer required
 require(xlsx) # This is pathetic, but the only way we can output formatted (and editable, so no LaTeX) data seems to be xlsx
 
 

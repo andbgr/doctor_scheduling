@@ -8,7 +8,6 @@
 # on the wards.
 
 
-# install.packages("Hmisc")
 # install.packages("xlsx")
 source("doctor_scheduling.R")
 
