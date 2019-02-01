@@ -1,7 +1,8 @@
-This script generates a doctors' schedule ("Dienstplan") for a department,
+This program generates a doctors' schedule ("Dienstplan") for a department,
 with night shifts (25h or split 12.5h) and normal day shifts, based on per-day
-constraints, trying to optimize for several parameters. See example.R in the
-example folder for more.
+constraints, trying to optimize for several parameters.
 
-Requirements: you need R (https://www.r-project.org/) which works on all major
-platforms, plus the Hmisc and xlsx packages, wich can be installed inside R.
+See example.R in the example folder for more.
+
+Requirements: you need R (https://www.r-project.org/), which works on all major
+platforms, plus the xlsx package, wich can be installed inside R.
