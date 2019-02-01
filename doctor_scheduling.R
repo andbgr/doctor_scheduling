@@ -369,7 +369,7 @@ read.input <- function(file = "input.xlsx", doctors = read.doctors("doctors.csv"
 	raw <- as.matrix(raw)
 	raw[is.na(raw)] <- ""
 	# TODO: i don't know why there are some whitespaces here, they were not in the input
-	raw <- sub(" ", "", raw)
+	raw <- sub(" *", "", raw)
 	# i have no idea why colnames are prefixed with "X" when reading xlsx
 	colnames(raw) <- sub("^X", "", colnames(raw))
 	# i also don't know why "-" is converted to "." when reading xlsx
@@ -1514,7 +1514,7 @@ optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(
 		# This is the factor that we'll optimize for (lower is better)
 		# The additive values determine the weight of the factor (and grant that the product doesn't zero out)
 		# TODO: normalize these somehow and put them on a quadratic function or something that punishes outliers
-		out1$optimization_factor <- (out1$opt_parms$n.unresolved + 0.001) *
+		out1$optimization_factor <- (out1$opt_parms$n.unresolved ^ 2 + 0.001) *
 		                            (out1$opt_parms$n.requests_denied + 0.001) *
 		                            (1 - ifelse(out1$opt_parms$n.soft_requests == 0, 1, out1$opt_parms$n.soft_requests_granted / out1$opt_parms$n.soft_requests) + 0.01) ^ weights$soft_requests *
 		                            (max(0.5, out1$opt_parms$range.shifts) + 0.01) ^ weights$r.shifts *
