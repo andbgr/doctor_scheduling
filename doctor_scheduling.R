@@ -368,6 +368,8 @@ read.input <- function(file = "input.xlsx", doctors = read.doctors("doctors.csv"
 	raw <- read.xlsx(file, sheetName="requests", rowIndex=0:nrow(doctors) + 1, colClasses="character")
 	raw <- as.matrix(raw)
 	raw[is.na(raw)] <- ""
+	# TODO: i don't know why there are some whitespaces here, they were not in the input
+	raw <- sub(" ", "", raw)
 	# i have no idea why colnames are prefixed with "X" when reading xlsx
 	colnames(raw) <- sub("^X", "", colnames(raw))
 	# i also don't know why "-" is converted to "." when reading xlsx
