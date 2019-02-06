@@ -9,7 +9,7 @@
 
 
 # install.packages("xlsx")
-source("doctor_scheduling.R")
+source("../doctor_scheduling.R")
 
 
 start_date <- as.Date("2019-02-01")

@@ -20,9 +20,9 @@ day_requests <- c(day_shifts, day_shifts_absent, "<5", "<6", "<7", "<8", "<9", "
 valid_shifts <- c(N_shifts, holiday_shifts, day_shifts, day_shifts_absent, "X", "FT", "-")
 valid_requests <- c("!N", "!N1", "!N2", N_shifts, holiday_shifts, day_requests, "X", "FT", "-")
 
-if(file.exists("holidays.list"))
+if(file.exists("../holidays.list"))
 {
-	holidays <- as.Date(as.character(read.csv("holidays.list", header = FALSE)$V1))
+	holidays <- as.Date(as.character(read.csv("../holidays.list", header = FALSE)$V1))
 } else
 {
 	warning("No 'holidays.list' file found. This file should contain dates of holiday in the format YYYY-MM-DD, separated by newlines, specifying holidays (Gesetzliche Feiertage). Proceeding without any holidays")
@@ -378,8 +378,8 @@ read.input <- function(file = "input.xlsx", doctors = read.doctors("doctors.csv"
 	requests <- raw[,-1]
 	dimnames(requests) <- list(raw[,1], paste(date.ym, colnames(raw)[-1], sep = "-"))
 	
-	# change U or ZA on holidays to !N
-	requests[,!is.workday(colnames(requests))][requests[,!is.workday(colnames(requests))] %in% c("U", "ZA")] <- "!N"
+	# change U or ZA on holidays to -
+	requests[,!is.workday(colnames(requests))][requests[,!is.workday(colnames(requests))] %in% c("U", "ZA")] <- "-"
 	
 	valid_input <- c(valid_requests, paste(valid_requests, "?", sep=""), "")
 	if(!all(requests %in% valid_input))
@@ -634,6 +634,8 @@ check.requests.granted <- function(requests, schedule)
 		return(!schedule %in% c("N", "N1"))
 	if(requests == "!N2")
 		return(!schedule %in% c("N", "N2"))
+	if(requests == "-")
+		return(schedule %in% c("-", ""))
 	# TODO: we need a variable for "<n" requests
 	if(requests %in% day_requests && !requests %in% c(day_shifts, day_shifts_absent))
 	{
@@ -1436,6 +1438,9 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	#
 	schedule[,workdays][schedule[,workdays] == ""] <- "-"
 	
+	# Cosmetics, remove "-" on holidays
+	schedule[,!is_workday][schedule[,!is_workday] == "-"] <- ""
+	
 	
 	doctors$weekhours_work <- doctors$hours * 40 / doctors$hours_min_work
 	
@@ -1514,14 +1519,14 @@ optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(
 		# This is the factor that we'll optimize for (lower is better)
 		# The additive values determine the weight of the factor (and grant that the product doesn't zero out)
 		# TODO: normalize these somehow and put them on a quadratic function or something that punishes outliers
-		out1$optimization_factor <- (out1$opt_parms$n.unresolved ^ 2 + 0.001) *
-		                            (out1$opt_parms$n.requests_denied + 0.001) *
-		                            (1 - ifelse(out1$opt_parms$n.soft_requests == 0, 1, out1$opt_parms$n.soft_requests_granted / out1$opt_parms$n.soft_requests) + 0.01) ^ weights$soft_requests *
+		out1$optimization_factor <- (out1$opt_parms$n.unresolved + 0.01) ^ 4 *
+		                            (out1$opt_parms$n.requests_denied + 0.01) ^ 4 *
+		                            (1 - ifelse(out1$opt_parms$n.soft_requests == 0, 1, (out1$opt_parms$n.soft_requests_granted - 1) / out1$opt_parms$n.soft_requests)) ^ weights$soft_requests *
 		                            (max(0.5, out1$opt_parms$range.shifts) + 0.01) ^ weights$r.shifts *
 		                            (max(0.5, out1$opt_parms$range.weekends) + 0.01) ^ weights$r.weekends *
-		                            (max(0.5, out1$opt_parms$range.nights) + 0.01) ^ weights$r.nights *
-		                            (1 - out1$opt_parms$n.split / out1$opt_parms$n.splittable + 0.01) ^ weights$n.split *
-		                            (out1$opt_parms$day_presence_missing.squared + 0.01) ^ weights$day_presence
+		                            (max(1, out1$opt_parms$range.nights) + 0.01) ^ weights$r.nights *
+		                            (1 - (out1$opt_parms$n.split - 1) / out1$opt_parms$n.splittable) ^ weights$n.split *
+		                            (out1$opt_parms$day_presence_missing.squared + 1) ^ weights$day_presence
 		
 		if(i == 0)
 		{
