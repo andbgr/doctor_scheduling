@@ -1438,7 +1438,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	#
 	schedule[,workdays][schedule[,workdays] == ""] <- "-"
 	
-	# Cosmetics, remove "-" on holidays
+	# Cosmetics, remove - on holidays
 	schedule[,!is_workday][schedule[,!is_workday] == "-"] <- ""
 	
 	
