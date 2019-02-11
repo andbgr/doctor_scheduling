@@ -867,7 +867,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			provisional_day_presence <- schedule[,day] != "X" & !requests[,day] %in% c("FT", "-", day_shifts_absent, holiday_shifts)
 			for (ward in levels(doctors$ward))
 			{
-				provisional_day_presence_allowing[doctors$ward == ward] <- sum(provisional_day_presence[doctors$ward == ward]) > wards$min_presence[ward,day]
+				provisional_day_presence_allowing[doctors$ward == ward] <- sum(provisional_day_presence[doctors$ward == ward]) > wards$min_presence[ward,day] - ifelse("X" %in% schedule[,day], 1, 0)
 			}
 			# also forbid if resulting total presence would be < -2
 			# TODO: this should not be a general rule
