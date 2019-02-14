@@ -1290,7 +1290,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
 			
 			### assign 5h-days
-			warnings <- c(warnings, warning(date, ": ", ward, ": ", doctor, " +5h [min hours]"))
+# 			warnings <- c(warnings, warning(date, ": ", ward, ": ", doctor, " +5h [min hours]"))
 			schedule[doctor,day] <- "5"
 			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + 5
 			wards$presence[ward,day] <- wards$presence[ward,day] + 1
@@ -1320,7 +1320,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
 			
 			### assign 5
-			warnings <- c(warnings, warning(date, ": ", ward, ": ", doctor, " +5h [min presence]"))
+# 			warnings <- c(warnings, warning(date, ": ", ward, ": ", doctor, " +5h [min presence]"))
 			schedule[doctor,day] <- "5"
 			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + 5
 			wards$presence[ward,day] <- wards$presence[ward,day] + 1
@@ -1352,7 +1352,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
 		
 		### assign 5
-		warnings <- c(warnings, warning(date, ": ", ward, ": ", doctor, " +5h [min total presence]"))
+# 		warnings <- c(warnings, warning(date, ": ", ward, ": ", doctor, " +5h [min total presence]"))
 		schedule[doctor,day] <- "5"
 		doctors[doctor,"hours"] <- doctors[doctor,"hours"] + 5
 		ward <- as.character(doctors[doctor,"ward"])
