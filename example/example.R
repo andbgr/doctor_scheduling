@@ -52,7 +52,7 @@ out <- optimal.schedule(doctors = doctors, requests = requests, wards = wards,
                                                             r.shifts = 2, 
                                                             r.weekends = 2, 
                                                             r.nights = 2, 
-                                                            n.split = 0.5, 
+                                                            n.split = 1, 
                                                             day_presence = 2))
 )
 

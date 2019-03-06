@@ -869,9 +869,9 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			{
 				provisional_day_presence_allowing[doctors$ward == ward] <- sum(provisional_day_presence[doctors$ward == ward]) > wards$min_presence[ward,day] - ifelse("X" %in% schedule[,day], 1, 0)
 			}
-			# also forbid if resulting total presence would be < -2
+			# also forbid if resulting total presence would be < -1
 			# TODO: this should not be a general rule
-			provisional_day_presence_allowing <- provisional_day_presence_allowing & sum(!requests[,day] %in% c("FT", "-", day_shifts_absent, holiday_shifts)) > sum(wards$min_presence[,day]) - 1
+			provisional_day_presence_allowing <- provisional_day_presence_allowing & sum(!requests[,day] %in% c("FT", "-", day_shifts_absent, holiday_shifts)) > sum(wards$min_presence[,day])
 		}
 		if(!any(provisional_day_presence_allowing))
 			warnings <- c(warnings, warning(date, ": No split possible based on provisional day presence"))
@@ -1523,7 +1523,7 @@ optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(
 		                            (out1$opt_parms$n.requests_denied + 0.01) ^ 4 *
 		                            (1 - ifelse(out1$opt_parms$n.soft_requests == 0, 0.9, (out1$opt_parms$n.soft_requests_granted - 1) / out1$opt_parms$n.soft_requests)) ^ weights$soft_requests *
 		                            (max(0.5, out1$opt_parms$range.shifts) + 0.01) ^ weights$r.shifts *
-		                            (max(0.5, out1$opt_parms$range.weekends) + 0.01) ^ weights$r.weekends *
+		                            (max(0.4, out1$opt_parms$range.weekends) + 0.01) ^ weights$r.weekends *
 		                            (max(1, out1$opt_parms$range.nights) + 0.01) ^ weights$r.nights *
 		                            (1 - (out1$opt_parms$n.split - 1) / out1$opt_parms$n.splittable) ^ weights$n.split *
 		                            (out1$opt_parms$day_presence_missing.squared + 1) ^ weights$day_presence
