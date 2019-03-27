@@ -862,12 +862,12 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		# TODO: only on weekdays
 		# TODO: resulting day presence can still be -1 if doctor from the same ward gets X *after* this
 		provisional_day_presence_allowing <- rep(TRUE, nrow(doctors))
-		if(is_workday[day])
+		if(is_splitday[day])
 		{
 			provisional_day_presence <- schedule[,day] != "X" & !requests[,day] %in% c("FT", "-", day_shifts_absent, holiday_shifts)
 			for (ward in levels(doctors$ward))
 			{
-				provisional_day_presence_allowing[doctors$ward == ward] <- sum(provisional_day_presence[doctors$ward == ward]) > wards$min_presence[ward,day] - ifelse("X" %in% schedule[,day], 1, 0)
+				provisional_day_presence_allowing[doctors$ward == ward] <- sum(provisional_day_presence[doctors$ward == ward]) > wards$min_presence[ward,day]
 			}
 			# also forbid if resulting total presence would be < -1
 			# TODO: this should not be a general rule
@@ -896,11 +896,11 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		doctors.available.for.N <- doctors.available.for.N | requests[,day] == "N"
 		
 		
-		doctors.available.for.N1 <- schedule[,day] != "X" & requests[,day] == "" & (doctors[,"split_shifts"] | doctors[,"shifts"] > doctors[,"shifts_target"] - 0.5)
+		doctors.available.for.N1 <- schedule[,day] != "X" & requests[,day] == "" & doctors[,"split_shifts"]
 		doctors.available.for.N1 <- doctors.available.for.N1 | requests[,day] == "N1"
 		
 		
-		doctors.available.for.N2 <- schedule[,day] != "X" & requests[,day] == "" & (doctors[,"split_shifts"] | doctors[,"shifts"] > doctors[,"shifts_target"] - 0.5)
+		doctors.available.for.N2 <- schedule[,day] != "X" & requests[,day] == "" & doctors[,"split_shifts"]
 		doctors.available.for.N2 <- doctors.available.for.N2 & provisional_day_presence_allowing
 		if(any(provisional_next_day_presence_allowing & doctors.available.for.N2))
 			doctors.available.for.N2 <- doctors.available.for.N2 & provisional_next_day_presence_allowing
@@ -1507,7 +1507,7 @@ optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(
 	while(i < n.iterations)
 	{
 		hardmode <- runif(1, min = 0, max = 1)
-		jitter <- runif(1, min = 0, max = 1)
+# 		jitter <- runif(1, min = 0, max = 1)
 # 		hardmode <- FALSE
 		jitter <- FALSE
 		out1 <- suppressMessages(create.schedule(doctors = doctors, 
@@ -1523,7 +1523,7 @@ optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(
 		                            (out1$opt_parms$n.requests_denied + 0.01) ^ 4 *
 		                            (1 - ifelse(out1$opt_parms$n.soft_requests == 0, 0.9, (out1$opt_parms$n.soft_requests_granted - 1) / out1$opt_parms$n.soft_requests)) ^ weights$soft_requests *
 		                            (max(0.5, out1$opt_parms$range.shifts) + 0.01) ^ weights$r.shifts *
-		                            (max(0.4, out1$opt_parms$range.weekends) + 0.01) ^ weights$r.weekends *
+		                            (max(0.5, out1$opt_parms$range.weekends) + 0.01) ^ weights$r.weekends *
 		                            (max(1, out1$opt_parms$range.nights) + 0.01) ^ weights$r.nights *
 		                            (1 - (out1$opt_parms$n.split - 1) / out1$opt_parms$n.splittable) ^ weights$n.split *
 		                            (out1$opt_parms$day_presence_missing.squared + 1) ^ weights$day_presence
