@@ -230,6 +230,7 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 	cellstyle.N <- cellstyle.table + Fill(foregroundColor="#00cc00")
 	cellstyle.N1 <- cellstyle.table + Fill(foregroundColor="#cccc00")
 	cellstyle.N2 <- cellstyle.table + Fill(foregroundColor="#00cccc")
+	cellstyle.absent <- cellstyle.table + Fill(foregroundColor="cccccc")
 	for(day in seq_along(dates))
 	{
 		for(row in seq_along(rownames(doctors)))
@@ -247,12 +248,15 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 			} else if(value == "N2")
 			{
 				setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.N2)
+			} else if(value %in% day_shifts_absent)
+			{
+				setCellStyle(cells[[paste(row + 1, day + 1, sep = ".")]], cellstyle.absent)
 			}
 		}
 	}
 	
 	# Colored background for day presence
-	max_color <- 3
+	max_colored_value <- 3
 	for(day in seq_along(dates))
 	{
 		if(is.workday(dates[day]))
@@ -262,14 +266,14 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 				value <- getCellValue(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]])
 				if(value > 0)
 				{
-					redblue <- round(max(0, 1 - value / max_color) * 255)
+					redblue <- round(max(0, 1 - value / max_colored_value) * 255)
 					color <- paste0("#", paste(as.hexmode(c(redblue,255,redblue)), collapse=''))
 					cellstyle.colorscale <- CellStyle(wb) + Fill(foregroundColor = color)
 					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.colorscale)
 				} else
 				if(value < 0)
 				{
-					greenblue <- round(max(0, 1 + value / max_color) * 255)
+					greenblue <- round(max(0, 1 + value / max_colored_value) * 255)
 					color <- paste0("#", paste(as.hexmode(c(255,greenblue,greenblue)), collapse=''))
 					cellstyle.colorscale <- CellStyle(wb) + Fill(foregroundColor = color)
 					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.colorscale)
@@ -298,14 +302,14 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 			} else
 			if(value > 0)
 			{
-				redblue <- round(max(0, 1 - value / max_color) * 255)
+				redblue <- round(max(0, 1 - value / max_colored_value) * 255)
 				color <- paste0("#", paste(as.hexmode(c(redblue,255,redblue)), collapse=''))
 				cellstyle.colorscale <- CellStyle(wb) + Fill(foregroundColor = color) + Border(color="black", position = "TOP")
 				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.colorscale)
 			} else
 			if(value < 0)
 			{
-				greenblue <- round(max(0, 1 + value / max_color) * 255)
+				greenblue <- round(max(0, 1 + value / max_colored_value) * 255)
 				color <- paste0("#", paste(as.hexmode(c(255,greenblue,greenblue)), collapse=''))
 				cellstyle.colorscale <- CellStyle(wb) + Fill(foregroundColor = color) + Border(color="black", position = "TOP")
 				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.colorscale)
@@ -1237,75 +1241,13 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		}
 	}
 	
-# 	### iteration 0 - fixed long days #########################################
-# 	workdays.shuffled <- sample(workdays)
-# 	for(day in workdays.shuffled)
-# 	{
-# 		if("8" %in% schedule[,day])
-# 			next
-# 		date <- dates[day]
-# 		message(date, ": ", appendLF = FALSE)
-# 		doctors.available <- doctors[,"hours"] < doctors[,"hours_max_work"] &
-# 		                     schedule[,day] == ""
-# 		if(sum(doctors.available) == 0)
-# 		{
-# 			message("no doctor")
-# 			warnings <- c(warnings, warning("No more doctor found for ", day, " presence remains ", "asdf"))
-# 			next
-# 		}
-# 		doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
-# 		
-# 		### assign 8
-# 		message("assigning ", doctor, " to 8h")
-# 		schedule[doctor,day] <- "8"
-# 		doctors[doctor,"hours"] <- doctors[doctor,"hours"] + 8
-# 		ward <- as.character(doctors[doctor,"ward"]) #TODO: ward was factor, caused error in the next line when interpreted as numeric - any more problems like this?
-# 		wards$presence[ward,day] <- wards$presence[ward,day] + 1
-# 		wards$hours[ward,day] <- wards$hours[ward,day] + 8
-# 	}
 	
-	### iteration 3 - doctor min hours #########################################
-	for(ward in rownames(wards$min_presence))
-	{
-		workdays.shuffled <- sample(workdays)
-		while(length(workdays.shuffled) > 0 && 
-		      any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_min_work"] | doctors$fill_all_days))
-		{
-			workdays.sorted <- workdays.shuffled[sort(wards$presence[ward,workdays.shuffled] - wards$min_presence[ward,workdays.shuffled], index.return = TRUE)$ix]
-			day <- workdays.sorted[1]
-			date <- dates[day]
-			doctors.available <- doctors[,"ward"] == ward &
-			                     doctors$fill_all_days &
-			                     schedule[,day] == ""
-			if(sum(doctors.available) == 0)
-			{
-				doctors.available <- doctors[,"ward"] == ward &
-				                     doctors[,"hours"] < doctors[,"hours_min_work"] &
-				                     schedule[,day] == ""
-			}
-			if(sum(doctors.available) == 0)
-			{
-				workdays.shuffled <- workdays.shuffled[workdays.shuffled != day]
-				next
-			}
-			doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
-			
-			### assign 5h-days
-# 			warnings <- c(warnings, warning(date, ": ", ward, ": ", doctor, " +5h [min hours]"))
-			schedule[doctor,day] <- "5"
-			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + 5
-			wards$presence[ward,day] <- wards$presence[ward,day] + 1
-			wards$hours[ward,day] <- wards$hours[ward,day] + 5
-		}
-	}
-	
-	### iteration 1 - ward min presence #########################################
+	### iteration 1 - min_day_hours up to ward min presence #########################################
 	for(ward in rownames(wards$min_presence))
 	{
 		workdays.shuffled <- sample(workdays)
 		workdays.shuffled <- workdays.shuffled[wards$presence[ward,workdays.shuffled] < wards$min_presence[ward,workdays.shuffled]]
-		while(length(workdays.shuffled) > 0 && 
-		      any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_max_work"]))
+		while(length(workdays.shuffled) > 0 && any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_max_work"]))
 		{
 			workdays.sorted <- workdays.shuffled[sort(wards$presence[ward,workdays.shuffled] - wards$min_presence[ward,workdays.shuffled], index.return = TRUE)$ix]
 			day <- workdays.sorted[1]
@@ -1320,25 +1262,56 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			}
 			doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
 			
-			### assign 5
-# 			warnings <- c(warnings, warning(date, ": ", ward, ": ", doctor, " +5h [min presence]"))
-			schedule[doctor,day] <- "5"
-			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + 5
-			wards$presence[ward,day] <- wards$presence[ward,day] + 1
-			wards$hours[ward,day] <- wards$hours[ward,day] + 5
+			### assign min_day_hours
+			hours <- doctors[doctor, "min_day_hours"]
+			schedule[doctor,day] <- as.character(hours)
+			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + hours
+			wards$hours[ward,day] <- wards$hours[ward,day] + hours
+			wards$presence[ward,day] <- wards$presence[ward,day] + hours / 5
 			
 			if(!wards$presence[ward,day] < wards$min_presence[ward,day])
 				workdays.shuffled <- workdays.shuffled[workdays.shuffled != day]
 		}
 	}
 	
-	### iteration 2 - total min presence - compensate for other wards #############################
+	
+	### iteration 2 - min_day_hours up to doctor min hours for those who prefer short days and those who prefer fill_all_days #########################################
+	for(ward in rownames(wards$min_presence))
+	{
+		workdays.shuffled <- sample(workdays)
+		while(length(workdays.shuffled) > 0 && any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_min_work"] | 
+		                                           doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_max_work"] & doctors[doctors$ward == ward,"fill_all_days"]))
+		{
+			workdays.sorted <- workdays.shuffled[sort(wards$presence[ward,workdays.shuffled] - wards$min_presence[ward,workdays.shuffled], index.return = TRUE)$ix]
+			day <- workdays.sorted[1]
+			date <- dates[day]
+			doctors.available <- doctors[,"ward"] == ward &
+			                     doctors[,"preferred_day_hours"] == "min" &
+			                     (doctors[,"hours"] < doctors[,"hours_min_work"] | doctors[,"fill_all_days"] & doctors[,"hours"] < doctors[,"hours_max_work"]) &
+			                     schedule[,day] == ""
+			if(sum(doctors.available) == 0)
+			{
+				workdays.shuffled <- workdays.shuffled[workdays.shuffled != day]
+				next
+			}
+			doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
+			
+			### assign min_day_hours
+			hours <- doctors[doctor, "min_day_hours"]
+			schedule[doctor,day] <- as.character(hours)
+			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + hours
+			wards$hours[ward,day] <- wards$hours[ward,day] + hours
+			wards$presence[ward,day] <- wards$presence[ward,day] + hours / 5
+		}
+	}
+	
+	
+	### iteration 3 - min_day_hours up to total min presence - compensate for other wards #############################
 	workdays.shuffled <- sample(workdays)
 	total_day_presence <- colSums(wards$presence)
 	total_day_min_presence <- colSums(wards$min_presence)
 	workdays.shuffled <- workdays.shuffled[total_day_presence[workdays.shuffled] < total_day_min_presence[workdays.shuffled]]
-	while(length(workdays.shuffled) > 0 && 
-	      any(doctors[,"hours"] < doctors[,"hours_max_work"]))
+	while(length(workdays.shuffled) > 0 && any(doctors[,"hours"] < doctors[,"hours_max_work"]))
 	{
 		workdays.sorted <- workdays.shuffled[sort(total_day_presence[workdays.shuffled] - total_day_min_presence[workdays.shuffled], index.return = TRUE)$ix]
 		day <- workdays.sorted[1]
@@ -1352,13 +1325,13 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		}
 		doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
 		
-		### assign 5
-# 		warnings <- c(warnings, warning(date, ": ", ward, ": ", doctor, " +5h [min total presence]"))
-		schedule[doctor,day] <- "5"
-		doctors[doctor,"hours"] <- doctors[doctor,"hours"] + 5
+		### assign min_day_hours
+		hours <- doctors[doctor, "min_day_hours"]
+		schedule[doctor,day] <- as.character(hours)
+		doctors[doctor,"hours"] <- doctors[doctor,"hours"] + hours
 		ward <- as.character(doctors[doctor,"ward"])
-		wards$presence[ward,day] <- wards$presence[ward,day] + 1
-		wards$hours[ward,day] <- wards$hours[ward,day] + 5
+		wards$hours[ward,day] <- wards$hours[ward,day] + hours
+		wards$presence[ward,day] <- wards$presence[ward,day] + hours / 5
 		
 		total_day_presence <- colSums(wards$presence)
 		total_day_min_presence <- colSums(wards$min_presence)
@@ -1367,23 +1340,20 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			workdays.shuffled <- workdays.shuffled[workdays.shuffled != day]
 	}
 	
-	### iteration 4 - doctor min hours - long days #####################################
+	
+	### iteration 4 - max_day_hours up to doctor min hours #########################################
 	for(ward in rownames(wards$min_presence))
 	{
 		workdays.shuffled <- sample(workdays)
-		while(length(workdays.shuffled) > 0 && 
-		      any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_min_work"]))
+		while(length(workdays.shuffled) > 0 && any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_min_work"]))
 		{
 			workdays.sorted <- workdays.shuffled[sort(wards$presence[ward,workdays.shuffled] - wards$min_presence[ward,workdays.shuffled], index.return = TRUE)$ix]
 			day <- workdays.sorted[1]
 			date <- dates[day]
-			# TODO: this is horribly stacked
 			doctors.available <- doctors[,"ward"] == ward &
 			                     doctors[,"hours"] < doctors[,"hours_min_work"] &
-			                     !requests[,day] %in% day_shifts &
-			                     (schedule[,day] == "" | schedule[,day] %in% day_shifts & 
-			                                             as.hours(schedule[,day]) < doctors[,"long_day_hours"] &
-			                                             (!requests[,day] %in% day_requests | as.hours(schedule[,day]) < as.hours(requests[,day])))
+			                     (schedule[,day] == "" | schedule[,day] %in% day_shifts & as.hours(schedule[,day]) < doctors[,"max_day_hours"]) & 
+			                     !requests[,day] %in% day_requests
 			if(sum(doctors.available) == 0)
 			{
 				workdays.shuffled <- workdays.shuffled[workdays.shuffled != day]
@@ -1391,57 +1361,25 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			}
 			doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
 			
-			### assign long days
-			new_hours <- doctors[doctor,"long_day_hours"]
-			previous_hours <- ifelse(schedule[doctor,day] %in% c("5", "6", "7"), as.numeric(schedule[doctor,day]), 0)
-			schedule[doctor,day] <- as.character(new_hours)
-			doctors[doctor,"hours"] <- doctors[doctor,"hours"] -previous_hours + new_hours
-			wards$presence[ward,day] <- wards$presence[ward,day] + ifelse(previous_hours == 0, 1, 0)
-			wards$hours[ward,day] <- wards$hours[ward,day] -previous_hours + new_hours
+			### assign min_day_hours
+			hours <- doctors[doctor, "max_day_hours"]
+			previous_hours <- as.hours(schedule[doctor,day])
+			schedule[doctor,day] <- as.character(hours)
+			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + hours - previous_hours
+			wards$hours[ward,day] <- wards$hours[ward,day] + hours - previous_hours
+			wards$presence[ward,day] <- wards$presence[ward,day] + (hours - previous_hours) / 5
 		}
 	}
 	
-	### iteration 5 - doctor min hours - 8h-days #####################################
-	# TODO: redo this
-	for(ward in rownames(wards$min_presence))
-	{
-		workdays.shuffled <- sample(workdays)
-		while(length(workdays.shuffled) > 0 && 
-		      any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_min_work"]))
-		{
-			workdays.sorted <- workdays.shuffled[sort(wards$presence[ward,workdays.shuffled] - wards$min_presence[ward,workdays.shuffled], index.return = TRUE)$ix]
-			day <- workdays.sorted[1]
-			date <- dates[day]
-			# TODO: this is horribly stacked
-			doctors.available <- doctors[,"ward"] == ward &
-			                     doctors[,"hours"] < doctors[,"hours_min_work"] &
-			                     !requests[,day] %in% day_shifts &
-			                     (schedule[,day] == "" | schedule[,day] %in% day_shifts & 
-			                                             as.hours(schedule[,day]) < 8 &
-			                                             (!requests[,day] %in% day_requests | as.hours(schedule[,day]) < as.hours(requests[,day])))
-			if(sum(doctors.available) == 0)
-			{
-				workdays.shuffled <- workdays.shuffled[workdays.shuffled != day]
-				next
-			}
-			doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
-			
-			### assign 8h-days
-			new_hours <- 8
-			previous_hours <- ifelse(schedule[doctor,day] %in% c("5", "6", "7"), as.numeric(schedule[doctor,day]), 0)
-			schedule[doctor,day] <- as.character(new_hours)
-			doctors[doctor,"hours"] <- doctors[doctor,"hours"] -previous_hours + new_hours
-			wards$presence[ward,day] <- wards$presence[ward,day] + ifelse(previous_hours == 0, 1, 0)
-			wards$hours[ward,day] <- wards$hours[ward,day] -previous_hours + new_hours
-		}
-	}
 	
+	################################################################################################
 	#
 	schedule[,workdays][schedule[,workdays] == ""] <- "-"
 	
 	# Cosmetics, remove - on holidays
 	schedule[,!is_workday][schedule[,!is_workday] == "-"] <- ""
 	
+	####### update stats ###################################################################
 	
 	doctors$weekhours_work <- doctors$hours * 40 / doctors$hours_min_work
 	
