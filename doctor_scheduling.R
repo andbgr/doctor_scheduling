@@ -230,7 +230,7 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 	cellstyle.N <- cellstyle.table + Fill(foregroundColor="#00cc00")
 	cellstyle.N1 <- cellstyle.table + Fill(foregroundColor="#cccc00")
 	cellstyle.N2 <- cellstyle.table + Fill(foregroundColor="#00cccc")
-	cellstyle.absent <- cellstyle.table + Fill(foregroundColor="cccccc")
+	cellstyle.absent <- cellstyle.table + Fill(foregroundColor="#c2c2c2")
 	for(day in seq_along(dates))
 	{
 		for(row in seq_along(rownames(doctors)))
