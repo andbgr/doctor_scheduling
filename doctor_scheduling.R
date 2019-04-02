@@ -252,12 +252,7 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 	}
 	
 	# Colored background for day presence
-	cellstyle.red3 <- CellStyle(wb) + Fill(foregroundColor="#ff0000")
-	cellstyle.red2 <- CellStyle(wb) + Fill(foregroundColor="#ff5555")
-	cellstyle.red1 <- CellStyle(wb) + Fill(foregroundColor="#ffaaaa")
-	cellstyle.green1 <- CellStyle(wb) + Fill(foregroundColor="#aaffaa")
-	cellstyle.green2 <- CellStyle(wb) + Fill(foregroundColor="#55ff55")
-	cellstyle.green3 <- CellStyle(wb) + Fill(foregroundColor="#00ff00")
+	max_color <- 3
 	for(day in seq_along(dates))
 	{
 		if(is.workday(dates[day]))
@@ -265,53 +260,59 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 			for(row in 1:(nrow(wards$presence)))
 			{
 				value <- getCellValue(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]])
+				if(value > 0)
+				{
+					redblue <- round(max(0, 1 - value / max_color) * 255)
+					color <- paste0("#", paste(as.hexmode(c(redblue,255,redblue)), collapse=''))
+					cellstyle.colorscale <- CellStyle(wb) + Fill(foregroundColor = color)
+					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.colorscale)
+				} else
 				if(value < 0)
-					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.red1)
-				if(value < -1)
-					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.red2)
-				if(value < -2)
-					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.red3)
-				if(value >= 1)
-					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.green1)
-				if(value >= 2)
-					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.green2)
-				if(value >= 3)
-					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.green3)
+				{
+					greenblue <- round(max(0, 1 + value / max_color) * 255)
+					color <- paste0("#", paste(as.hexmode(c(255,greenblue,greenblue)), collapse=''))
+					cellstyle.colorscale <- CellStyle(wb) + Fill(foregroundColor = color)
+					setCellStyle(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], cellstyle.colorscale)
+				}
+			}
+		} else
+		{
+			for(row in 1:(nrow(wards$presence)))
+			{
+				setCellValue(cells[[paste(row + nrow(doctors) + 2, day + 1, sep = ".")]], "")
 			}
 		}
 	}
 	
 	# the following is only for a line to separate the sum
 	# for some reason, getCellStyle doesn't work, which would have made this easier
-	cellstyle.red3 <- cellstyle.red3 + Border(color="black", position = "TOP")
-	cellstyle.red2 <- cellstyle.red2 + Border(color="black", position = "TOP")
-	cellstyle.red1 <- cellstyle.red1 + Border(color="black", position = "TOP")
-	cellstyle.green1 <- cellstyle.green1 + Border(color="black", position = "TOP")
-	cellstyle.green2 <- cellstyle.green2 + Border(color="black", position = "TOP")
-	cellstyle.green3 <- cellstyle.green3 + Border(color="black", position = "TOP")
 	cellstyle.neutral <- CellStyle(wb) + Border(color="black", position = "TOP")
 	for(day in seq_along(dates))
 	{
 		if(is.workday(dates[day]))
 		{
 			value <- getCellValue(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]])
-			if(value >= 0)
+			if(value == 0)
+			{
 				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.neutral)
+			} else
+			if(value > 0)
+			{
+				redblue <- round(max(0, 1 - value / max_color) * 255)
+				color <- paste0("#", paste(as.hexmode(c(redblue,255,redblue)), collapse=''))
+				cellstyle.colorscale <- CellStyle(wb) + Fill(foregroundColor = color) + Border(color="black", position = "TOP")
+				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.colorscale)
+			} else
 			if(value < 0)
-				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.red1)
-			if(value < -1)
-				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.red2)
-			if(value < -2)
-				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.red3)
-			if(value >= 1)
-				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.green1)
-			if(value >= 2)
-				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.green2)
-			if(value >= 3)
-				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.green3)
+			{
+				greenblue <- round(max(0, 1 + value / max_color) * 255)
+				color <- paste0("#", paste(as.hexmode(c(255,greenblue,greenblue)), collapse=''))
+				cellstyle.colorscale <- CellStyle(wb) + Fill(foregroundColor = color) + Border(color="black", position = "TOP")
+				setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.colorscale)
+			}
 		} else
 		{
-			setCellStyle(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], cellstyle.neutral)
+			setCellValue(cells[[paste(nrow(doctors) + nrow(wards$presence) + 3, day + 1, sep = ".")]], "")
 		}
 	}
 	
