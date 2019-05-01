@@ -59,6 +59,7 @@ read.doctors <- function(file = "doctors.xlsx")
 # 	}
 	
 	doctors$hours_min      <- rep(NA)
+	doctors$hours_max      <- rep(NA)
 	doctors$hours_min_work <- rep(NA)
 	doctors$hours_max_work <- rep(NA)
 # 	doctors$hours_max_AZG  <- rep(NA)
@@ -121,7 +122,7 @@ write.template <- function(start_date, end_date, doctors = read.doctors("doctors
 		cells <- getCells(rows)
 		
 		# YYYY-MM in topleft cell
-		setCellValue(cells[["1.1"]], format(start_date, format="%Y-%m"))
+		setCellValue(cells[["1.1"]], format(dates[1], format="%Y-%m"))
 		
 		cellstyle.table <- CellStyle(wb) + Border(color="black", position = c("TOP", "LEFT", "BOTTOM", "RIGHT"))
 		for(day in seq_along(dates))
@@ -201,7 +202,7 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 	cells <- getCells(rows)
 	
 	# YYYY-MM in topleft cell
-	setCellValue(cells[["1.1"]], format(start_date, format="%Y-%m"))
+	setCellValue(cells[["1.1"]], format(dates[1], format="%Y-%m"))
 	
 	cellstyle.table <- CellStyle(wb) + Border(color="black", position = c("TOP", "LEFT", "BOTTOM", "RIGHT"))
 	for(day in seq_along(dates))
@@ -359,6 +360,7 @@ write.schedule <- function(doctors = NA, schedule = NA, wards = NA, opt_parms = 
 		filename <- paste0("schedule", i, ".xlsx")
 		i <- i + 1
 	}
+	message("Writing to '", filename, "'")
 	saveWorkbook(wb, filename)
 }
 
@@ -752,11 +754,10 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	requests <- strip.requests(requests, hardmode = hardmode)
 	
 	# Calculate various hours
-	hours_min <- sum(is_workday) * 8
-	# TODO: take weekhours into account for non-40h-doctors
-	doctors$hours_min <- hours_min
-	doctors$hours_min_work <- doctors$hours_min - rowSums(requests == "U" | requests == "ZA" | requests == "NG") * 8 #TODO
-	doctors$hours_max_work <- doctors$hours_min_work * (doctors$weekhours_max / 40)
+	doctors$hours_min <- sum(is_workday) * 8 * doctors$weekhours / 40
+	doctors$hours_max <- sum(is_workday) * 8 * doctors$weekhours_max / 40
+	doctors$hours_min_work <- doctors$hours_min - rowSums(requests == "U" | requests == "ZA" | requests == "NG") * 8
+	doctors$hours_max_work <- doctors$hours_max - rowSums(requests == "U" | requests == "ZA" | requests == "NG") * 8
 	# TODO: this may not be entirely correct
 # 	doctors$hours_max_AZG <- floor((doctors$hours_min - rowSums(requests == "U") * 8) * (48 / 40))
 	
@@ -785,31 +786,33 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		if(requests[doctor,2] == "")
 			requests[doctor,2] <- "!N1"
 		doctors[doctor,"hours"] <- doctors[doctor,"hours"] + 9
+		
+		# Request surrounding weekends free
 		if(is_friday[7])
 		{
-			if((7) %in% days && requests[doctor, 7] == "")
+			if((7) %in% days && requests[doctor, 7] == "" && doctors[doctor, "keep_weekends_apart"] > 4)
 				requests[doctor, 7] <- "!N"
-			if((8) %in% days && requests[doctor, 8] == "")
+			if((8) %in% days && requests[doctor, 8] == "" && doctors[doctor, "keep_weekends_apart"] > 2)
 				requests[doctor, 8] <- "!N"
-	#		if((9) %in% days && requests[doctor, 9] == "")
-	#			requests[doctor, 9] <- "!N"
+			if((9) %in% days && requests[doctor, 9] == "" && doctors[doctor, "keep_weekends_apart"] > 5)
+				requests[doctor, 9] <- "!N"
 		}
 		if(is_saturday[7])
 		{
-			if((6) %in% days && requests[doctor, 6] == "")
+			if((6) %in% days && requests[doctor, 6] == "" && doctors[doctor, "keep_weekends_apart"] > 1)
 				requests[doctor, 6] <- "!N"
-			if((7) %in% days && requests[doctor, 7] == "")
+			if((7) %in% days && requests[doctor, 7] == "" && doctors[doctor, "keep_weekends_apart"] > 0)
 				requests[doctor, 7] <- "!N"
-			if((8) %in% days && requests[doctor, 8] == "")
+			if((8) %in% days && requests[doctor, 8] == "" && doctors[doctor, "keep_weekends_apart"] > 2)
 				requests[doctor, 8] <- "!N"
 		}
 		if(is_sunday[7])
 		{
-			if((5) %in% days && requests[doctor, 5] == "")
+			if((5) %in% days && requests[doctor, 5] == "" && doctors[doctor, "keep_weekends_apart"] > 3)
 				requests[doctor, 5] <- "!N"
-			if((6) %in% days && requests[doctor, 6] == "")
+			if((6) %in% days && requests[doctor, 6] == "" && doctors[doctor, "keep_weekends_apart"] > 1)
 				requests[doctor, 6] <- "!N"
-			if((7) %in% days && requests[doctor, 7] == "")
+			if((7) %in% days && requests[doctor, 7] == "" && doctors[doctor, "keep_weekends_apart"] > 4)
 				requests[doctor, 7] <- "!N"
 		}
 	}
@@ -1097,51 +1100,55 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			# Request surrounding weekends free
 			if(is_friday[day])
 			{
-				if((day + 7) %in% days && requests[doctor, day + 7] == "")
-					requests[doctor, day + 7] <- "!N"
-				if((day + 8) %in% days && requests[doctor, day + 8] == "")
-					requests[doctor, day + 8] <- "!N"
-# 				if((day + 9) %in% days && requests[doctor, day + 9] == "")
-# 					requests[doctor, day + 9] <- "!N"
-				if((day - 5) %in% days && requests[doctor, day - 5] == "")
-					requests[doctor, day - 5] <- "!N"
-				if((day - 6) %in% days && requests[doctor, day - 6] == "")
-					requests[doctor, day - 6] <- "!N"
-				if((day - 7) %in% days && requests[doctor, day - 7] == "")
+				if((day - 7) %in% days && requests[doctor, day - 7] == "" && doctors[doctor, "keep_weekends_apart"] > 4)
 					requests[doctor, day - 7] <- "!N"
+				if((day - 6) %in% days && requests[doctor, day - 6] == "" && doctors[doctor, "keep_weekends_apart"] > 1)
+					requests[doctor, day - 6] <- "!N"
+				if((day - 5) %in% days && requests[doctor, day - 5] == "" && doctors[doctor, "keep_weekends_apart"] > 3)
+					requests[doctor, day - 5] <- "!N"
+				
+				if((day + 7) %in% days && requests[doctor, day + 7] == "" && doctors[doctor, "keep_weekends_apart"] > 4)
+					requests[doctor, day + 7] <- "!N"
+				if((day + 8) %in% days && requests[doctor, day + 8] == "" && doctors[doctor, "keep_weekends_apart"] > 2)
+					requests[doctor, day + 8] <- "!N"
+				if((day + 9) %in% days && requests[doctor, day + 9] == "" && doctors[doctor, "keep_weekends_apart"] > 5)
+					requests[doctor, day + 9] <- "!N"
 			}
 			if(is_saturday[day])
 			{
-				if((day + 6) %in% days && requests[doctor, day + 6] == "")
-					requests[doctor, day + 6] <- "!N"
-				if((day + 7) %in% days && requests[doctor, day + 7] == "")
-					requests[doctor, day + 7] <- "!N"
-				if((day + 8) %in% days && requests[doctor, day + 8] == "")
-					requests[doctor, day + 8] <- "!N"
-				if((day - 6) %in% days && requests[doctor, day - 6] == "")
-					requests[doctor, day - 6] <- "!N"
-				if((day - 7) %in% days && requests[doctor, day - 7] == "")
-					requests[doctor, day - 7] <- "!N"
-				if((day - 8) %in% days && requests[doctor, day - 8] == "")
+				if((day - 8) %in% days && requests[doctor, day - 8] == "" && doctors[doctor, "keep_weekends_apart"] > 2)
 					requests[doctor, day - 8] <- "!N"
+				if((day - 7) %in% days && requests[doctor, day - 7] == "" && doctors[doctor, "keep_weekends_apart"] > 0)
+					requests[doctor, day - 7] <- "!N"
+				if((day - 6) %in% days && requests[doctor, day - 6] == "" && doctors[doctor, "keep_weekends_apart"] > 1)
+					requests[doctor, day - 6] <- "!N"
+					
+				if((day + 6) %in% days && requests[doctor, day + 6] == "" && doctors[doctor, "keep_weekends_apart"] > 1)
+					requests[doctor, day + 6] <- "!N"
+				if((day + 7) %in% days && requests[doctor, day + 7] == "" && doctors[doctor, "keep_weekends_apart"] > 0)
+					requests[doctor, day + 7] <- "!N"
+				if((day + 8) %in% days && requests[doctor, day + 8] == "" && doctors[doctor, "keep_weekends_apart"] > 2)
+					requests[doctor, day + 8] <- "!N"
 			}
 			if(is_sunday[day])
 			{
-				if((day + 5) %in% days && requests[doctor, day + 5] == "")
-					requests[doctor, day + 5] <- "!N"
-				if((day + 6) %in% days && requests[doctor, day + 6] == "")
-					requests[doctor, day + 6] <- "!N"
-				if((day + 7) %in% days && requests[doctor, day + 7] == "")
-					requests[doctor, day + 7] <- "!N"
-				if((day - 7) %in% days && requests[doctor, day - 7] == "")
-					requests[doctor, day - 7] <- "!N"
-				if((day - 8) %in% days && requests[doctor, day - 8] == "")
+				if((day - 9) %in% days && requests[doctor, day - 9] == "" && doctors[doctor, "keep_weekends_apart"] > 5)
+					requests[doctor, day - 9] <- "!N"
+				if((day - 8) %in% days && requests[doctor, day - 8] == "" && doctors[doctor, "keep_weekends_apart"] > 2)
 					requests[doctor, day - 8] <- "!N"
-# 				if((day - 9) %in% days && requests[doctor, day - 9] == "")
-# 					requests[doctor, day - 9] <- "!N"
+				if((day - 7) %in% days && requests[doctor, day - 7] == "" && doctors[doctor, "keep_weekends_apart"] > 4)
+					requests[doctor, day - 7] <- "!N"
+					
+				if((day + 5) %in% days && requests[doctor, day + 5] == "" && doctors[doctor, "keep_weekends_apart"] > 3)
+					requests[doctor, day + 5] <- "!N"
+				if((day + 6) %in% days && requests[doctor, day + 6] == "" && doctors[doctor, "keep_weekends_apart"] > 1)
+					requests[doctor, day + 6] <- "!N"
+				if((day + 7) %in% days && requests[doctor, day + 7] == "" && doctors[doctor, "keep_weekends_apart"] > 4)
+					requests[doctor, day + 7] <- "!N"
 			}
 		}
 	}
+	
 	doctors$shifts_carryover   <- doctors$shifts   - doctors$shifts_target
 	doctors$weekends_carryover <- doctors$weekends - doctors$weekends_target
 	
@@ -1282,36 +1289,6 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	}
 	
 	
-	### min_day_hours up to doctor min hours (for those who prefer short days) and fill_all_days (for those who prefer it) #########################################
-	for(ward in rownames(wards$min_presence))
-	{
-		workdays.shuffled <- sample(workdays)
-		while(length(workdays.shuffled) > 0 && any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_min_work"] | 
-		                                           doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_max_work"] - 4 & doctors[doctors$ward == ward,"fill_all_days"]))
-		{
-			workdays.sorted <- workdays.shuffled[sort(wards$presence[ward,workdays.shuffled] - wards$min_presence[ward,workdays.shuffled], index.return = TRUE)$ix]
-			day <- workdays.sorted[1]
-			date <- dates[day]
-			doctors.available <- doctors[,"ward"] == ward &
-			                     doctors[,"preferred_day_hours"] == "min" &
-			                     (doctors[,"hours"] < doctors[,"hours_min_work"] | doctors[,"fill_all_days"] & doctors[,"hours"] < doctors[,"hours_max_work"] - 4) &
-			                     schedule[,day] == ""
-			if(sum(doctors.available) == 0)
-			{
-				workdays.shuffled <- workdays.shuffled[workdays.shuffled != day]
-				next
-			}
-			doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
-			
-			### assign min_day_hours
-			hours <- doctors[doctor, "min_day_hours"]
-			schedule[doctor,day] <- as.character(hours)
-			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + hours
-			wards$hours[ward,day] <- wards$hours[ward,day] + hours
-			wards$presence[ward,day] <- wards$presence[ward,day] + hours / 5
-			warnings <- c(warnings, warning(date, ": min hours (short days) and fill_all_days: ", doctor, ": ", doctors[doctor,"hours"], " + ", hours, "h"))
-		}
-	}
 	
 	
 	### min_day_hours up to doctor max hours and total min presence - compensate for other wards #############################
@@ -1350,6 +1327,42 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	}
 	
 	
+	
+	
+	### min_day_hours up to doctor min hours (for those who prefer short days) and fill_all_days (for those who prefer it) #########################################
+	for(ward in rownames(wards$min_presence))
+	{
+		workdays.shuffled <- sample(workdays)
+		while(length(workdays.shuffled) > 0 && any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_min_work"] | 
+		                                           doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_max_work"] - 4 & doctors[doctors$ward == ward,"fill_all_days"]))
+		{
+			workdays.sorted <- workdays.shuffled[sort(wards$presence[ward,workdays.shuffled] - wards$min_presence[ward,workdays.shuffled], index.return = TRUE)$ix]
+			day <- workdays.sorted[1]
+			date <- dates[day]
+			doctors.available <- doctors[,"ward"] == ward &
+			                     doctors[,"preferred_day_hours"] == "min" &
+			                     (doctors[,"hours"] < doctors[,"hours_min_work"] | doctors[,"fill_all_days"] & doctors[,"hours"] < doctors[,"hours_max_work"] - 4) &
+			                     schedule[,day] == ""
+			if(sum(doctors.available) == 0)
+			{
+				workdays.shuffled <- workdays.shuffled[workdays.shuffled != day]
+				next
+			}
+			doctor <- pick.doctor(doctors[doctors.available,], sort_by = "hours")
+			
+			### assign min_day_hours
+			hours <- doctors[doctor, "min_day_hours"]
+			schedule[doctor,day] <- as.character(hours)
+			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + hours
+			wards$hours[ward,day] <- wards$hours[ward,day] + hours
+			wards$presence[ward,day] <- wards$presence[ward,day] + hours / 5
+			warnings <- c(warnings, warning(date, ": min hours (short days) and fill_all_days: ", doctor, ": ", doctors[doctor,"hours"], " + ", hours, "h"))
+		}
+	}
+	
+	
+	
+	
 	### max_day_hours up to doctor min hours #########################################
 	for(ward in rownames(wards$min_presence))
 	{
@@ -1377,7 +1390,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + hours - previous_hours
 			wards$hours[ward,day] <- wards$hours[ward,day] + hours - previous_hours
 			wards$presence[ward,day] <- wards$presence[ward,day] + (hours - previous_hours) / 5
-			warnings <- c(warnings, warning(date, ": min hours (long days): ", doctor, ": ", doctors[doctor,"hours"], " + ", hours, "h"))
+			warnings <- c(warnings, warning(date, ": min hours (long days): ", doctor, ": ", doctors[doctor,"hours"], " + ", hours - previous_hours, "h"))
 		}
 	}
 	
@@ -1453,7 +1466,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 
 
 
-optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(), wards = read.wards(), n.iterations = 100, weights = list(soft_requests = 0.5, r.shifts = 2, r.weekends = 2, r.nights = 2, n.split = 0.5, day_presence = 1))
+optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(), wards = read.wards(), n.iterations = 100, weights = list(soft_requests = 1, r.shifts = 2, r.weekends = 2, r.nights = 2, n.split = 1, day_presence = 1))
 {
 	message("Optimizing - trying ", n.iterations, " variations...")
 	message("n.unres n.rq_den n.srq_granted r.shifts r.weekends r.nights n.split day_presence")
@@ -1461,10 +1474,11 @@ optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(
 	i <- 0
 	while(i < n.iterations)
 	{
-		hardmode <- runif(1, min = 0, max = 1)
 # 		jitter <- runif(1, min = 0, max = 1)
-# 		hardmode <- FALSE
 		jitter <- FALSE
+		hardmode <- runif(1, min = 0, max = 1)
+# 		hardmode <- FALSE
+# 		hardmode <- 0.625
 		out1 <- suppressMessages(create.schedule(doctors = doctors, 
 		                                         requests = requests, 
 		                                         wards = wards, 
