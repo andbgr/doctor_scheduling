@@ -1501,11 +1501,11 @@ optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(
 		# TODO: normalize these somehow and put them on a quadratic function or something that punishes outliers
 		out1$optimization_factor <- (out1$opt_parms$n.unresolved + 0.01) ^ 4 *
 		                            (out1$opt_parms$n.requests_denied + 0.01) ^ 4 *
-		                            (1 - ifelse(out1$opt_parms$n.soft_requests == 0, 0.9, (out1$opt_parms$n.soft_requests_granted - 1) / out1$opt_parms$n.soft_requests)) ^ weights$soft_requests *
+		                            (2 - ifelse(out1$opt_parms$n.soft_requests == 0, 1, out1$opt_parms$n.soft_requests_granted / out1$opt_parms$n.soft_requests)) ^ weights$soft_requests *
 		                            (max(0.5, out1$opt_parms$range.shifts) + 0.01) ^ weights$r.shifts *
 		                            (max(0.5, out1$opt_parms$range.weekends) + 0.01) ^ weights$r.weekends *
 		                            (max(1, out1$opt_parms$range.nights) + 0.01) ^ weights$r.nights *
-		                            (1 - (out1$opt_parms$n.split - 1) / out1$opt_parms$n.splittable) ^ weights$n.split *
+		                            (2 - out1$opt_parms$n.split / out1$opt_parms$n.splittable) ^ weights$n.split *
 		                            (out1$opt_parms$day_presence_missing.squared + 1) ^ weights$day_presence
 		
 		if(i == 0)
