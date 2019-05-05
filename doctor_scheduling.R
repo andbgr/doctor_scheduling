@@ -60,11 +60,8 @@ read.doctors <- function(file = "doctors.xlsx")
 	
 	doctors$hours_min      <- rep(NA)
 	doctors$hours_max      <- rep(NA)
-	doctors$hours_min_work <- rep(NA)
-	doctors$hours_max_work <- rep(NA)
-# 	doctors$hours_max_AZG  <- rep(NA)
 	doctors$hours  <- rep(0)
-	doctors$weekhours_work <- rep(NA)
+	doctors$weekhours <- rep(NA)
 	
 	doctors$shifts_target  <- rep(NA)
 	doctors$weekends_target  <- rep(NA)
@@ -457,6 +454,34 @@ strip.requests <- function(requests, hardmode = FALSE)
 		requests.grant <- as.logical(rbinom(length(requests.soft), size = 1, prob = prob))
 		requests[requests.soft][requests.grant]  <- sub("\\?", "", requests[requests.soft][requests.grant])
 		requests[requests.soft][!requests.grant] <- sub(".*\\?.*", "", requests[requests.soft][!requests.grant])
+		
+		
+		
+		days <- seq_along(colnames(requests))
+		# weed out nonsensical requests
+		days_ <- days[-length(days)]
+		for(doctor in rownames(requests)[rowSums(requests == "N") > 1])
+		{
+			for(day in days_[requests[doctor,days_] == "N"])
+			{
+				if(requests[doctor,day + 1] == "N")
+					requests[doctor,day + sample(0:1, 1)] <- ""
+			}
+		}
+		
+		# weed out conflicting requests
+		for(day in days[colSums(requests == "N" | requests == "N1") > 1])
+		{
+			mask <- rep(FALSE, sum(requests[,day] == "N" | requests[,day] == "N1"))
+			mask[sample(1:length(mask), 1)] <- TRUE
+			requests[requests[,day] == "N" | requests[,day] == "N1", day][!mask] <- ""
+		}
+		for(day in days[colSums(requests == "N" | requests == "N2") > 1])
+		{
+			mask <- rep(FALSE, sum(requests[,day] == "N" | requests[,day] == "N2"))
+			mask[sample(1:length(mask), 1)] <- TRUE
+			requests[requests[,day] == "N" | requests[,day] == "N2", day][!mask] <- ""
+		}
 	}
 	return(requests)
 }
@@ -541,7 +566,7 @@ is.sundaylike <- function(dates)
 
 # x: shift(s), also works for matrix of shifts
 # Output: Work Hours
-as.hours <- function(x, count_holidays = FALSE)
+as.hours <- function(x, count_holidays = TRUE)
 {
 	if(length(x) > 1)
 	{
@@ -696,8 +721,8 @@ pick.doctor <- function(doctors, sort_by, jitter = FALSE)
 	out <- matrix(numeric(), nrow(doctors), 2, dimnames = list(rownames(doctors), c("sort_value", "enough")))
 	if(sort_by == "hours")
 	{
-		out[,"sort_value"] <- doctors$hours / doctors$hours_min_work
-		out[,"enough"] <- doctors$hours >= doctors$hours_min_work
+		out[,"sort_value"] <- doctors$hours / doctors$hours_min
+		out[,"enough"] <- doctors$hours >= doctors$hours_min
 	} else if(sort_by == "shifts")
 	{
 		out[,"sort_value"] <- doctors$shifts / doctors$shifts_target
@@ -754,19 +779,16 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	requests <- strip.requests(requests, hardmode = hardmode)
 	
 	# Calculate various hours
-	doctors$hours_min <- sum(is_workday) * 8 * doctors$weekhours / 40
+	doctors$hours_min <- sum(is_workday) * 8 * doctors$weekhours_min / 40
 	doctors$hours_max <- sum(is_workday) * 8 * doctors$weekhours_max / 40
-	doctors$hours_min_work <- doctors$hours_min - rowSums(requests == "U" | requests == "ZA" | requests == "NG") * 8
-	doctors$hours_max_work <- doctors$hours_max - rowSums(requests == "U" | requests == "ZA" | requests == "NG") * 8
-	# TODO: this may not be entirely correct
-# 	doctors$hours_max_AZG <- floor((doctors$hours_min - rowSums(requests == "U") * 8) * (48 / 40))
 	
-	doctors$shifts_target <- (doctors$hours_min_work - rowSums(requests == "FB8") * 8) * doctors$number_of_shifts_factor
+	hours_min_work <- doctors$hours_min - rowSums(requests == "U" | requests == "ZA" | requests == "NG") * 8
+	doctors$shifts_target <- (hours_min_work - rowSums(requests == "FB8") * 8) * doctors$number_of_shifts_factor
 	doctors$shifts_target <- doctors$shifts_target * length(days) / sum(doctors$shifts_target)
 	doctors$shifts_target <- doctors$shifts_target - doctors$shifts_carryover
 	doctors$shifts_carryover <- rep(0)
 	
-	doctors$weekends_target <- (doctors$hours_min_work - rowSums(requests == "FB8") * 8) * doctors$number_of_shifts_factor
+	doctors$weekends_target <- (hours_min_work - rowSums(requests == "FB8") * 8) * doctors$number_of_shifts_factor
 	doctors$weekends_target <- doctors$weekends_target * (sum(is_fridaylike) * 0.4 + sum(is_saturdaylike) + sum(is_sundaylike) * 0.6) / sum(doctors$weekends_target)
 	doctors$weekends_target <- doctors$weekends_target - doctors$weekends_carryover
 	doctors$weekends_carryover <- rep(0)
@@ -777,6 +799,8 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	{
 		schedule[,day][requests[,day] %in% c(holiday_shifts, "FT", "-")] <- requests[,day][requests[,day] %in% c(holiday_shifts, "FT", "-")]
 	}
+	# update stats
+	doctors$hours <- rowSums(as.hours(schedule, count_holidays = TRUE))
 	
 	
 	### preliminary - enter X on first day ##########################################################
@@ -867,7 +891,6 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		split <- NULL
 		
 		
-		# TODO: only on weekdays
 		# TODO: resulting day presence can still be -1 if doctor from the same ward gets X *after* this
 		provisional_day_presence_allowing <- rep(TRUE, nrow(doctors))
 		if(is_splitday[day])
@@ -1260,13 +1283,13 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	{
 		workdays.shuffled <- sample(workdays)
 		workdays.shuffled <- workdays.shuffled[wards$presence[ward,workdays.shuffled] < wards$min_presence[ward,workdays.shuffled]]
-		while(length(workdays.shuffled) > 0 && any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_max_work"] - 4))
+		while(length(workdays.shuffled) > 0 && any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_max"] - 4))
 		{
 			workdays.sorted <- workdays.shuffled[sort(wards$presence[ward,workdays.shuffled] - wards$min_presence[ward,workdays.shuffled], index.return = TRUE)$ix]
 			day <- workdays.sorted[1]
 			date <- dates[day]
 			doctors.available <- doctors[,"ward"] == ward &
-			                     doctors[,"hours"] < doctors[,"hours_max_work"] - 4 &
+			                     doctors[,"hours"] < doctors[,"hours_max"] - 4 &
 			                     schedule[,day] == ""
 			if(sum(doctors.available) == 0)
 			{
@@ -1296,12 +1319,12 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	total_day_presence <- colSums(wards$presence)
 	total_day_min_presence <- colSums(wards$min_presence)
 	workdays.shuffled <- workdays.shuffled[total_day_presence[workdays.shuffled] < total_day_min_presence[workdays.shuffled]]
-	while(length(workdays.shuffled) > 0 && any(doctors[,"hours"] < doctors[,"hours_max_work"] - 4))
+	while(length(workdays.shuffled) > 0 && any(doctors[,"hours"] < doctors[,"hours_max"] - 4))
 	{
 		workdays.sorted <- workdays.shuffled[sort(total_day_presence[workdays.shuffled] - total_day_min_presence[workdays.shuffled], index.return = TRUE)$ix]
 		day <- workdays.sorted[1]
 		date <- dates[day]
-		doctors.available <- doctors[,"hours"] < doctors[,"hours_max_work"] - 4 &
+		doctors.available <- doctors[,"hours"] < doctors[,"hours_max"] - 4 &
 		                     schedule[,day] == ""
 		if(sum(doctors.available) == 0)
 		{
@@ -1333,15 +1356,15 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	for(ward in rownames(wards$min_presence))
 	{
 		workdays.shuffled <- sample(workdays)
-		while(length(workdays.shuffled) > 0 && any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_min_work"] | 
-		                                           doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_max_work"] - 4 & doctors[doctors$ward == ward,"fill_all_days"]))
+		while(length(workdays.shuffled) > 0 && any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_min"] | 
+		                                           doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_max"] - 4 & doctors[doctors$ward == ward,"fill_all_days"]))
 		{
 			workdays.sorted <- workdays.shuffled[sort(wards$presence[ward,workdays.shuffled] - wards$min_presence[ward,workdays.shuffled], index.return = TRUE)$ix]
 			day <- workdays.sorted[1]
 			date <- dates[day]
 			doctors.available <- doctors[,"ward"] == ward &
 			                     doctors[,"preferred_day_hours"] == "min" &
-			                     (doctors[,"hours"] < doctors[,"hours_min_work"] | doctors[,"fill_all_days"] & doctors[,"hours"] < doctors[,"hours_max_work"] - 4) &
+			                     (doctors[,"hours"] < doctors[,"hours_min"] | doctors[,"fill_all_days"] & doctors[,"hours"] < doctors[,"hours_max"] - 4) &
 			                     schedule[,day] == ""
 			if(sum(doctors.available) == 0)
 			{
@@ -1367,13 +1390,13 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	for(ward in rownames(wards$min_presence))
 	{
 		workdays.shuffled <- sample(workdays)
-		while(length(workdays.shuffled) > 0 && any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_min_work"]))
+		while(length(workdays.shuffled) > 0 && any(doctors[doctors$ward == ward,"hours"] < doctors[doctors$ward == ward,"hours_min"]))
 		{
 			workdays.sorted <- workdays.shuffled[sort(wards$presence[ward,workdays.shuffled] - wards$min_presence[ward,workdays.shuffled], index.return = TRUE)$ix]
 			day <- workdays.sorted[1]
 			date <- dates[day]
 			doctors.available <- doctors[,"ward"] == ward &
-			                     doctors[,"hours"] < doctors[,"hours_min_work"] &
+			                     doctors[,"hours"] < doctors[,"hours_min"] &
 			                     (schedule[,day] == "" | schedule[,day] %in% day_shifts & as.hours(schedule[,day]) < doctors[,"max_day_hours"]) & 
 			                     !requests[,day] %in% day_requests
 			if(sum(doctors.available) == 0)
@@ -1410,7 +1433,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	
 	####### update stats ###################################################################
 	
-	doctors$weekhours_work <- doctors$hours * 40 / doctors$hours_min_work
+	doctors$weekhours <- doctors$weekhours_min * doctors$hours / doctors$hours_min
 	
 	request_counts <- count.requests.granted(requests = requests.orig, schedule = schedule)
 	doctors$requests_granted <- request_counts$requests_granted
