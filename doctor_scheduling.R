@@ -454,35 +454,20 @@ strip.requests <- function(requests, hardmode = FALSE)
 		requests.grant <- as.logical(rbinom(length(requests.soft), size = 1, prob = prob))
 		requests[requests.soft][requests.grant]  <- sub("\\?", "", requests[requests.soft][requests.grant])
 		requests[requests.soft][!requests.grant] <- sub(".*\\?.*", "", requests[requests.soft][!requests.grant])
-		
-		
-		
-		days <- seq_along(colnames(requests))
-		# weed out nonsensical requests
-		days_ <- days[-length(days)]
-		for(doctor in rownames(requests)[rowSums(requests == "N") > 1])
+	}
+	
+	# weed out nonsensical requests
+	days <- seq_along(colnames(requests))
+	days <- days[-length(days)]
+	for(doctor in rownames(requests)[rowSums(requests == "N") > 1])
+	{
+		for(day in days[requests[doctor,days] == "N"])
 		{
-			for(day in days_[requests[doctor,days_] == "N"])
-			{
-				if(requests[doctor,day + 1] == "N")
-					requests[doctor,day + sample(0:1, 1)] <- ""
-			}
-		}
-		
-		# weed out conflicting requests
-		for(day in days[colSums(requests == "N" | requests == "N1") > 1])
-		{
-			mask <- rep(FALSE, sum(requests[,day] == "N" | requests[,day] == "N1"))
-			mask[sample(1:length(mask), 1)] <- TRUE
-			requests[requests[,day] == "N" | requests[,day] == "N1", day][!mask] <- ""
-		}
-		for(day in days[colSums(requests == "N" | requests == "N2") > 1])
-		{
-			mask <- rep(FALSE, sum(requests[,day] == "N" | requests[,day] == "N2"))
-			mask[sample(1:length(mask), 1)] <- TRUE
-			requests[requests[,day] == "N" | requests[,day] == "N2", day][!mask] <- ""
+			if(requests[doctor,day + 1] == "N")
+				requests[doctor,day + sample(0:1, 1)] <- ""
 		}
 	}
+	
 	return(requests)
 }
 
@@ -799,8 +784,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	{
 		schedule[,day][requests[,day] %in% c(holiday_shifts, "FT", "-")] <- requests[,day][requests[,day] %in% c(holiday_shifts, "FT", "-")]
 	}
-	# update stats
-	doctors$hours <- rowSums(as.hours(schedule, count_holidays = TRUE))
+# 	doctors$hours <- rowSums(as.hours(schedule, count_holidays = TRUE))
 	
 	
 	### preliminary - enter X on first day ##########################################################
@@ -809,7 +793,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		schedule[doctor,1] <- "X"
 		if(requests[doctor,2] == "")
 			requests[doctor,2] <- "!N1"
-		doctors[doctor,"hours"] <- doctors[doctor,"hours"] + 9
+# 		doctors[doctor,"hours"] <- doctors[doctor,"hours"] + 9
 		
 		# Request surrounding weekends free
 		if(is_friday[7])
@@ -891,9 +875,14 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		split <- NULL
 		
 		
+		N_requested <- sum(requests[,day] == "N") > 0
+		N1_requested <- sum(requests[,day] == "N1") > 0
+		N2_reqested <- sum(requests[,day] == "N2") > 0
+		
+		
 		# TODO: resulting day presence can still be -1 if doctor from the same ward gets X *after* this
 		provisional_day_presence_allowing <- rep(TRUE, nrow(doctors))
-		if(is_splitday[day])
+		if(is_splitday[day] && !N_requested)
 		{
 			provisional_day_presence <- schedule[,day] != "X" & !requests[,day] %in% c("FT", "-", day_shifts_absent, holiday_shifts)
 			for (ward in levels(doctors$ward))
@@ -909,7 +898,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		
 		
 		provisional_next_day_presence_allowing <- rep(TRUE, nrow(doctors))
-		if(next_day %in% days && is_workday[next_day])
+		if(next_day %in% days && is_workday[next_day] && !N_requested)
 		{
 			provisional_next_day_presence <- schedule[,next_day] != "N2" & !requests[,next_day] %in% c("N2", "FT", "-", day_shifts_absent, holiday_shifts)
 			for (ward in levels(doctors$ward))
@@ -941,12 +930,8 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		split_possible <- is_splitday[day] && 
 		                  any(doctors.available.for.N1) && 
 		                  any(doctors.available.for.N2) && 
-		                  sum(doctors.available.for.N1 | doctors.available.for.N2) >= 2
-		
-		
-		N_requested <- sum(requests[,day] %in% "N") > 0
-		N1_requested <- sum(requests[,day] %in% "N1") > 0
-		N2_reqested <- sum(requests[,day] %in% "N2") > 0
+		                  sum(doctors.available.for.N1 | doctors.available.for.N2) >= 2 || 
+		                  N1_requested && N2_reqested
 		
 		
 		sort_by <- "days"
@@ -1000,9 +985,10 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			schedule[doctor,day] <- "N1"
 			doctors[doctor,"shifts"] <- doctors[doctor,"shifts"] + 0.5
 			doctors[doctor,"days"]   <- doctors[doctor,"days"] + 1
-			doctors[doctor,"hours"]  <- doctors[doctor,"hours"] + 12.5
+# 			doctors[doctor,"hours"]  <- doctors[doctor,"hours"] + 12.5
 			
 			### resulting restrictions
+			requests[doctor,day] <- "!N1"
 			if (p_prev_day %in% days && requests[doctor,p_prev_day] == "")
 				requests[doctor,p_prev_day] <- "!N1"
 			if (prev_day %in% days && requests[doctor,prev_day] == "")
@@ -1039,7 +1025,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			schedule[doctor,day] <- "N2"
 			doctors[doctor,"shifts"] <- doctors[doctor,"shifts"] + 0.5
 			doctors[doctor,"nights"] <- doctors[doctor,"nights"] + 1
-			doctors[doctor,"hours"]  <- doctors[doctor,"hours"] + 4
+# 			doctors[doctor,"hours"]  <- doctors[doctor,"hours"] + 4
 			if(is_fridaylike[day])
 				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + 0.4
 			if(next_day %in% days && schedule[doctor,next_day] == "")
@@ -1049,6 +1035,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			}
 			
 			### resulting restrictions
+			requests[doctor,day] <- "!N2"
 # 			if (p_prev_day %in% days && requests[doctor,p_prev_day] == "")
 # 				requests[doctor,p_prev_day] <- "!N"
 			if (prev_day %in% days && requests[doctor,prev_day] == "")
@@ -1065,7 +1052,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			doctors[doctor,"shifts"] <- doctors[doctor,"shifts"] + 1
 			doctors[doctor,"days"]   <- doctors[doctor,"days"] + 1
 			doctors[doctor,"nights"] <- doctors[doctor,"nights"] + 1
-			doctors[doctor,"hours"]  <- doctors[doctor,"hours"] + 16
+# 			doctors[doctor,"hours"]  <- doctors[doctor,"hours"] + 16
 			if(is_fridaylike[day])
 				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + 0.4
 			if(is_saturdaylike[day])
@@ -1099,6 +1086,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			
 			
 			### resulting restrictions
+			requests[doctor,day] <- "!N"
 			if (p_prev_day %in% days && requests[doctor,p_prev_day] == "")
 				requests[doctor,p_prev_day] <- "!N1"
 			if (prev_day %in% days && requests[doctor,prev_day] == "")
