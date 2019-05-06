@@ -97,10 +97,10 @@ read.doctors <- function(file = "doctors.xlsx")
 # this is a bit tedious, but we can have formatted spreadsheets
 write.template <- function(start_date, end_date, doctors = read.doctors("doctors.csv"))
 {
-	if(file.exists("input.xlsx"))
-	{
-		return(warning("File 'input.xlsx' already exists, cowardly refusing to overwrite"))
-	}
+# 	if(file.exists("input.xlsx"))
+# 	{
+# 		return(warning("File 'input.xlsx' already exists, cowardly refusing to overwrite"))
+# 	}
 	
 	dates <- seq(from=start_date, to=end_date, by=1)
 	
