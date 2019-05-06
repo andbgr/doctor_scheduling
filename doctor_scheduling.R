@@ -444,27 +444,30 @@ strip.requests <- function(requests, hardmode = FALSE)
 	if(hardmode == FALSE)
 	{
 		requests <- sub("\\?", "", requests)
-	} else if (hardmode == TRUE)
-	{
-		requests <- sub(".*\\?.*", "", requests)
 	} else
 	{
-		prob <- 1 - hardmode
-		requests.soft <- grep("\\?", requests)
-		requests.grant <- as.logical(rbinom(length(requests.soft), size = 1, prob = prob))
-		requests[requests.soft][requests.grant]  <- sub("\\?", "", requests[requests.soft][requests.grant])
-		requests[requests.soft][!requests.grant] <- sub(".*\\?.*", "", requests[requests.soft][!requests.grant])
-	}
-	
-	# weed out nonsensical requests
-	days <- seq_along(colnames(requests))
-	days <- days[-length(days)]
-	for(doctor in rownames(requests)[rowSums(requests == "N") > 1])
-	{
-		for(day in days[requests[doctor,days] == "N"])
+		if (hardmode == TRUE)
 		{
-			if(requests[doctor,day + 1] == "N")
-				requests[doctor,day + sample(0:1, 1)] <- ""
+			requests <- sub(".*\\?.*", "", requests)
+		} else
+		{
+			prob <- 1 - hardmode
+			requests.soft <- grep("\\?", requests)
+			requests.grant <- as.logical(rbinom(length(requests.soft), size = 1, prob = prob))
+			requests[requests.soft][requests.grant]  <- sub("\\?", "", requests[requests.soft][requests.grant])
+			requests[requests.soft][!requests.grant] <- sub(".*\\?.*", "", requests[requests.soft][!requests.grant])
+		}
+		
+		# weed out nonsensical requests
+		days <- seq_along(colnames(requests))
+		days <- days[-length(days)]
+		for(doctor in rownames(requests)[rowSums(requests == "N") > 1])
+		{
+			for(day in days[requests[doctor,days] == "N"])
+			{
+				if(requests[doctor,day + 1] == "N")
+					requests[doctor,day + sample(0:1, 1)] <- ""
+			}
 		}
 	}
 	
@@ -1477,7 +1480,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 
 
 
-optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(), wards = read.wards(), n.iterations = 100, weights = list(soft_requests = 1, r.shifts = 2, r.weekends = 2, r.nights = 2, n.split = 1, day_presence = 1))
+optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(), wards = read.wards(), n.iterations = 100, weights = list(soft_requests = 1, r.shifts = 1, r.weekends = 1, r.nights = 1, n.split = 1, day_presence = 1))
 {
 	message("Optimizing - trying ", n.iterations, " variations...")
 	message("n.unres n.rq_den n.srq_granted r.shifts r.weekends r.nights n.split day_presence")
@@ -1534,6 +1537,26 @@ optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(
 
 
 
+
+# iterative approach: do a second run using the weekends from the first one
+optimal.schedule2 <- function(doctors = read.doctors(), requests = read.requests(), wards = read.wards(), n.iterations = 100, weights = list(soft_requests = 1, r.shifts = 2, r.weekends = 2, r.nights = 2, n.split = 1, day_presence = 1))
+{
+	out <- optimal.schedule(doctors = doctors, requests = requests, wards = wards, n.iterations = n.iterations * 0.85, weights = weights)
+	
+	schedule <- out$schedule
+	
+	days <- seq_along(colnames(requests))
+	dates <- as.Date(colnames(requests))
+	is_weekend <- is.fridaylike(dates) | is.saturdaylike(dates) | is.sundaylike(dates)
+	requests[,is_weekend][schedule[,is_weekend] == "N"] <- "N"
+	requests[,is_weekend][schedule[,is_weekend] == "N1"] <- "N1"
+	requests[,is_weekend][schedule[,is_weekend] == "N2"] <- "N2"
+	requests[,days[-1]][requests[,days[-length(days)]] == "N"] <- ""
+	
+	out <- optimal.schedule(doctors = doctors, requests = requests, wards = wards, n.iterations = n.iterations * 0.15, weights = weights)
+	
+	return(out)
+}
 
 
 
