@@ -20,6 +20,10 @@ day_requests <- c(day_shifts, day_shifts_absent, "<5", "<6", "<7", "<8", "<9", "
 valid_shifts <- c(N_shifts, holiday_shifts, day_shifts, day_shifts_absent, "X", "FT", "-")
 valid_requests <- c("!N", "!N1", "!N2", N_shifts, holiday_shifts, day_requests, "X", "FT", "-")
 
+friday_weight <- 0.9
+saturday_weight <- 1.2
+sunday_weight <- 0.9
+
 if(file.exists("../holidays.list"))
 {
 	holidays <- as.Date(as.character(read.csv("../holidays.list", header = FALSE)$V1))
@@ -777,7 +781,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 	doctors$shifts_carryover <- rep(0)
 	
 	doctors$weekends_target <- (hours_min_work - rowSums(requests == "FB8") * 8) * doctors$number_of_shifts_factor
-	doctors$weekends_target <- doctors$weekends_target * (sum(is_fridaylike) * 0.4 + sum(is_saturdaylike) + sum(is_sundaylike) * 0.6) / sum(doctors$weekends_target)
+	doctors$weekends_target <- doctors$weekends_target * (sum(is_fridaylike) * friday_weight + sum(is_saturdaylike) * saturday_weight + sum(is_sundaylike) * sunday_weight) / sum(doctors$weekends_target)
 	doctors$weekends_target <- doctors$weekends_target - doctors$weekends_carryover
 	doctors$weekends_carryover <- rep(0)
 	
@@ -989,6 +993,12 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			doctors[doctor,"shifts"] <- doctors[doctor,"shifts"] + 0.5
 			doctors[doctor,"days"]   <- doctors[doctor,"days"] + 1
 # 			doctors[doctor,"hours"]  <- doctors[doctor,"hours"] + 12.5
+			if(is_fridaylike[day])
+				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + friday_weight / 2
+			if(is_saturdaylike[day])
+				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + saturday_weight / 2
+			if(is_sundaylike[day])
+				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + sunday_weight / 2
 			
 			### resulting restrictions
 			requests[doctor,day] <- "!N1"
@@ -1030,7 +1040,11 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			doctors[doctor,"nights"] <- doctors[doctor,"nights"] + 1
 # 			doctors[doctor,"hours"]  <- doctors[doctor,"hours"] + 4
 			if(is_fridaylike[day])
-				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + 0.4
+				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + friday_weight / 2
+			if(is_saturdaylike[day])
+				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + saturday_weight / 2
+			if(is_sundaylike[day])
+				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + sunday_weight / 2
 			if(next_day %in% days && schedule[doctor,next_day] == "")
 			{
 				schedule[doctor,next_day] <- "X"
@@ -1057,11 +1071,11 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			doctors[doctor,"nights"] <- doctors[doctor,"nights"] + 1
 # 			doctors[doctor,"hours"]  <- doctors[doctor,"hours"] + 16
 			if(is_fridaylike[day])
-				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + 0.4
+				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + friday_weight
 			if(is_saturdaylike[day])
-				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + 1
+				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + saturday_weight
 			if(is_sundaylike[day])
-				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + 0.6
+				doctors[doctor,"weekends"] <- doctors[doctor,"weekends"] + sunday_weight
 			
 			if(next_day %in% days && schedule[doctor,next_day] == "")
 			{
@@ -1492,7 +1506,6 @@ optimal.schedule <- function(doctors = read.doctors(), requests = read.requests(
 		jitter <- FALSE
 		hardmode <- runif(1, min = 0, max = 1)
 # 		hardmode <- FALSE
-# 		hardmode <- 0.625
 		out1 <- suppressMessages(create.schedule(doctors = doctors, 
 		                                         requests = requests, 
 		                                         wards = wards, 
