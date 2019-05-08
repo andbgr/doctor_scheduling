@@ -14,7 +14,7 @@ wards    <- input$wards
 # CREATE OPTIMAL SCHEDULE
 # this will take time, on my system (Core i3 from 2015) it takes 1h for about 7000 iterations
 system.time(
-out <- optimal.schedule2(doctors = doctors, requests = requests, wards = wards, 
+out <- optimal.schedule(doctors = doctors, requests = requests, wards = wards, 
                         n.iterations = 7000, weights = list(soft_requests = 1, 
                                                             r.shifts = 1, 
                                                             r.weekends = 1, 
