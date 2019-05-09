@@ -20,9 +20,9 @@ day_requests <- c(day_shifts, day_shifts_absent, "<5", "<6", "<7", "<8", "<9", "
 valid_shifts <- c(N_shifts, holiday_shifts, day_shifts, day_shifts_absent, "X", "FT", "-")
 valid_requests <- c("!N", "!N1", "!N2", N_shifts, holiday_shifts, day_requests, "X", "FT", "-")
 
-friday_weight <- 0.9
-saturday_weight <- 1.2
-sunday_weight <- 0.9
+friday_weight <- 0.95
+saturday_weight <- 1.1
+sunday_weight <- 0.95
 
 if(file.exists("../holidays.list"))
 {
@@ -1309,7 +1309,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + hours
 			wards$hours[ward,day] <- wards$hours[ward,day] + hours
 			wards$presence[ward,day] <- wards$presence[ward,day] + hours / 5
-			warnings <- c(warnings, warning(date, ": ward min presence: ", doctor, ": ", doctors[doctor,"hours"], " + ", hours, "h"))
+# 			warnings <- c(warnings, warning(date, ": ward min presence: ", doctor, ": ", doctors[doctor,"hours"], " + ", hours, "h"))
 			
 			if(!wards$presence[ward,day] < wards$min_presence[ward,day])
 				workdays.shuffled <- workdays.shuffled[workdays.shuffled != day]
@@ -1345,7 +1345,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 		ward <- as.character(doctors[doctor,"ward"])
 		wards$hours[ward,day] <- wards$hours[ward,day] + hours
 		wards$presence[ward,day] <- wards$presence[ward,day] + hours / 5
-		warnings <- c(warnings, warning(date, ": total min presence: ", doctor, ": ", doctors[doctor,"hours"], " + ", hours, "h"))
+# 		warnings <- c(warnings, warning(date, ": total min presence: ", doctor, ": ", doctors[doctor,"hours"], " + ", hours, "h"))
 		
 		total_day_presence <- colSums(wards$presence)
 		total_day_min_presence <- colSums(wards$min_presence)
@@ -1384,7 +1384,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + hours
 			wards$hours[ward,day] <- wards$hours[ward,day] + hours
 			wards$presence[ward,day] <- wards$presence[ward,day] + hours / 5
-			warnings <- c(warnings, warning(date, ": min hours (short days) and fill_all_days: ", doctor, ": ", doctors[doctor,"hours"], " + ", hours, "h"))
+# 			warnings <- c(warnings, warning(date, ": min hours (short days) and fill_all_days: ", doctor, ": ", doctors[doctor,"hours"], " + ", hours, "h"))
 		}
 	}
 	
@@ -1418,7 +1418,7 @@ create.schedule <- function(doctors = read.doctors(), requests = read.requests()
 			doctors[doctor,"hours"] <- doctors[doctor,"hours"] + hours - previous_hours
 			wards$hours[ward,day] <- wards$hours[ward,day] + hours - previous_hours
 			wards$presence[ward,day] <- wards$presence[ward,day] + (hours - previous_hours) / 5
-			warnings <- c(warnings, warning(date, ": min hours (long days): ", doctor, ": ", doctors[doctor,"hours"], " + ", hours - previous_hours, "h"))
+# 			warnings <- c(warnings, warning(date, ": min hours (long days): ", doctor, ": ", doctors[doctor,"hours"], " + ", hours - previous_hours, "h"))
 		}
 	}
 	
