@@ -659,7 +659,7 @@ check.requests.granted <- function(requests, schedule)
 	if(requests == "!N2")
 		return(!schedule %in% c("N", "N2"))
 	if(requests == "-")
-		return(schedule %in% c("-", ""))
+		return(schedule %in% c("-", "FT", ""))
 	# TODO: we need a variable for "<n" requests
 	if(requests %in% day_requests && !requests %in% c(day_shifts, day_shifts_absent))
 	{
