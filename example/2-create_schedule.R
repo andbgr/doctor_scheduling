@@ -16,8 +16,8 @@ wards    <- input$wards
 system.time(
 out <- optimal.schedule(doctors = doctors, requests = requests, wards = wards, 
                         n.iterations = 7000, weights = list(soft_requests = 1, 
-                                                            r.shifts = 1, 
-                                                            r.weekends = 1, 
+                                                            r.shifts = 2, 
+                                                            r.weekends = 2, 
                                                             r.nights = 1, 
                                                             n.split = 1, 
                                                             day_presence = 1))
